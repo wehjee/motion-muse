@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Motion Muse — play music with your hands</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Layer 0: mirrored webcam -->
+  <video id="cam" autoplay playsinline muted></video>
+
+  <!-- Layer 1: scrim + grain -->
+  <div class="scrim"></div>
+  <div class="grain"></div>
+
+  <!-- Layer 2: instrument canvas (wheels, cursors, keys) -->
+  <canvas id="stage"></canvas>
+
+  <!-- Layer 3: chrome -->
+  <header class="brand">
+    <span class="brand-mark">◐</span>
+    <span class="brand-name">Motion&nbsp;Muse</span>
+  </header>
+
+  <div id="chordDisplay" class="chord-display" aria-live="polite">
+    <span id="chordName"></span>
+  </div>
+
+  <!-- Intro card -->
+  <div id="intro" class="intro">
+    <h1>Play music<br/>with your hands.</h1>
+    <p>Left hand chooses the root. Right hand shapes the chord.<br/>
+       Nothing leaves your browser — tracking runs locally.</p>
+    <div class="intro-actions">
+      <button id="btnCamera" class="btn btn-primary">
+        <span class="dot"></span>Enable camera
+      </button>
+      <button id="btnMouse" class="btn btn-ghost">Try with mouse first</button>
+    </div>
+    <p id="introStatus" class="intro-status"></p>
+  </div>
+
+  <!-- Bottom bar -->
+  <footer id="bar" class="bar" hidden>
+    <button id="barCamera" class="bar-btn" title="Toggle camera">
+      <span class="cam-dot"></span><span id="barCameraLabel">Camera</span>
+    </button>
+    <div class="bar-seg" role="tablist" aria-label="Mode">
+      <button id="modeChords" class="bar-seg-btn is-active" role="tab">Chords</button>
+      <button id="modeMelody" class="bar-seg-btn" role="tab">Melody</button>
+    </div>
+    <span id="hint" class="bar-hint">hover a wheel to play</span>
+  </footer>
+
+  <script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

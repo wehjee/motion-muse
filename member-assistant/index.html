@@ -15,7 +15,8 @@
     Hairline ............. rgba(16,19,17,0.08)
     Green (actions) ...... #0e7a3e   Green text #0b6b35   Green wash #e8f6ed
     Amber / red .......... #8a5a00 on #fdf3dc / #b3261e on #fdecea
-    Chat bar ............. white glass (blurred, 66 to 88% white) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
+    Chat bar ............. liquid glass capsule (blurred, 50 to 82% white, bright rim) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
+    Bar border ........... green gradient ring (#d9fbe7, #8ef0b0, #3acb78, #0e7a3e) that flows on focus and while thinking
 
   TYPOGRAPHY
     Assistant voice ...... system serif (New York / Georgia), 20 to 22px
@@ -594,13 +595,6 @@
   @media (hover: hover) { .icon-btn:hover { background: rgba(16, 19, 17, 0.06); } }
   .icon-btn:active { transform: scale(0.9); }
   .bar button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
-  .bar:focus-within {
-    box-shadow:
-      0 20px 44px -20px rgba(16, 19, 17, 0.3),
-      0 3px 10px rgba(16, 19, 17, 0.07),
-      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
-      0 0 0 4px rgba(58, 203, 120, 0.2);
-  }
 
   .field {
     flex: 1 1 auto; min-width: 0; height: 100%;
@@ -683,14 +677,6 @@
     z-index: 4;
   }
   .bar .avatar-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
-  /* a clear ring on the bar when the text box is reached with the keyboard */
-  .keys .bar:has(#message:focus) {
-    box-shadow:
-      0 20px 44px -20px rgba(16, 19, 17, 0.3),
-      0 3px 10px rgba(16, 19, 17, 0.07),
-      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
-      0 0 0 2px var(--green);
-  }
 
   /* ---------- sizes ---------- */
 
@@ -725,6 +711,257 @@
     .mod__ghost i { animation: none; }
     .meter i, .btn, .opt span, .chip, .send { transition-duration: 0.01s; }
   }
+
+  /* =====================================================================
+     LIQUID GLASS PASS
+     Floating controls are glass capsules: see-through, blurred behind,
+     a bright rim on the edge, a soft shade inside for thickness.
+     The chat bar's border is a green gradient that flows when it has
+     focus and while the assistant is thinking.
+     ===================================================================== */
+
+  :root {
+    --h: 60px;
+    --hair: rgba(16, 19, 17, 0.06);
+    --line: rgba(16, 19, 17, 0.06);
+    --tint: rgba(16, 19, 17, 0.045);                       /* quiet fill for controls */
+    --glass: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.5) 100%);
+    --blur: blur(24px) saturate(1.9);
+    --rim:                                                  /* light caught on the edge of the glass */
+      inset 0 1.2px 0 rgba(255, 255, 255, 0.98),
+      inset 1px 0 0 rgba(255, 255, 255, 0.6),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.45),
+      inset -1px 0 0 rgba(255, 255, 255, 0.3),
+      inset 0 0 0 1px rgba(16, 19, 17, 0.05);
+    --thick: inset 0 -9px 12px -11px rgba(16, 19, 17, 0.16); /* a little shade inside, so the glass has depth */
+    --float: 0 1px 1px rgba(16, 19, 17, 0.04), 0 14px 30px -16px rgba(16, 19, 17, 0.3);
+    --ring: linear-gradient(90deg, #d9fbe7 0%, #8ef0b0 18%, #3acb78 40%, #0e7a3e 58%, #3acb78 76%, #8ef0b0 90%, #d9fbe7 100%);
+  }
+
+  /* a whisper of color so the glass has something to catch. The page still reads as white. */
+  .app {
+    background:
+      radial-gradient(70% 34% at 92% 100%, rgba(58, 203, 120, 0.1), rgba(58, 203, 120, 0) 70%),
+      radial-gradient(60% 30% at 0% 0%, rgba(120, 200, 190, 0.05), rgba(255, 255, 255, 0) 70%),
+      var(--page);
+  }
+  .app::before {
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent); mask-image: linear-gradient(to bottom, #000 30%, transparent);
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.85) 20%, rgba(255, 255, 255, 0));
+  }
+
+  /* ---------- chat bar: a floating glass capsule ---------- */
+  .bar {
+    border-radius: 999px;
+    background: var(--glass);
+    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+    box-shadow: var(--float), 12px 14px 34px -18px rgba(40, 190, 110, 0.55);
+  }
+  /* rim + a soft highlight that slides along the top edge with the pointer */
+  .bar::after {
+    box-shadow: var(--rim), var(--thick);
+    background: radial-gradient(38% 90% at var(--lx, 28%) 0%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 70%);
+    transition: background-position 0.3s ease;
+  }
+  /* the gradient border: only the 1.5px edge of this layer is visible */
+  .bar::before {
+    content: ""; position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: var(--ring);
+    background-size: 220% 100%;
+    background-position: 68% 0;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 3;
+    transition: opacity 0.35s ease, padding 0.2s ease;
+  }
+  /* the same gradient, blurred, as a soft glow in and around the edge */
+  .bar__aura {
+    position: absolute; inset: -3px;
+    border-radius: inherit;
+    padding: 7px;
+    background: var(--ring);
+    background-size: 220% 100%;
+    background-position: 68% 0;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    filter: blur(9px);
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+    transition: opacity 0.45s ease;
+  }
+  .bar:focus-within::before, .bar.is-thinking::before { opacity: 1; animation: ring-flow 5s linear infinite; }
+  .bar:focus-within .bar__aura, .bar.is-thinking .bar__aura { opacity: 0.6; animation: ring-flow 5s linear infinite; }
+  .bar.is-thinking::before, .bar.is-thinking .bar__aura { animation-duration: 1.8s; }
+  @keyframes ring-flow { from { background-position: 0% 0; } to { background-position: 183.4% 0; } }
+  /* keyboard users get a thicker ring so focus is easy to see */
+  .keys .bar:has(#message:focus)::before { padding: 2.5px; }
+
+  .icon-btn { width: 44px; height: 44px; margin-left: 8px; border-radius: 50%; }
+  .icon-btn svg { width: 22px; height: 22px; }
+  .field { padding-left: 6px; }
+  .send {
+    width: 34px; height: 34px;
+    background-color: var(--green);
+    background-image: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 14px -8px rgba(14, 122, 62, 0.8);
+  }
+  .avatar-btn { border-radius: 0 999px 999px 0; }
+  .face { right: calc(var(--h) * 0.6); }
+
+  /* ---------- chips and small floating things ---------- */
+  .dock { gap: 9px; }
+  .chips { min-height: 40px; padding: 2px 2px 2px; }
+  .chip {
+    position: relative;
+    min-height: 36px; padding: 0 14px;
+    font-size: 14px; font-weight: 500; letter-spacing: -0.005em;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(16px) saturate(1.8); backdrop-filter: blur(16px) saturate(1.8);
+    box-shadow: var(--rim), 0 6px 14px -10px rgba(16, 19, 17, 0.3);
+  }
+  .chip::after { content: ""; position: absolute; inset: -4px 0; }           /* taller touch area than it looks */
+  @media (pointer: coarse) { .chip { min-height: 38px; } .chips { min-height: 44px; } }
+  @media (hover: hover) { .chip:hover { background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(244, 245, 242, 0.8)); } }
+  .tag {
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6);
+    box-shadow: var(--rim);
+  }
+
+  /* ---------- cards: lighter, finer, softer ---------- */
+  .mod {
+    padding: 18px;
+    border-radius: 28px;
+    background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.86) 100%);
+    box-shadow:
+      inset 0 0 0 1px rgba(16, 19, 17, 0.055),
+      inset 0 1.2px 0 #ffffff,
+      0 1px 2px rgba(16, 19, 17, 0.03),
+      0 26px 48px -30px rgba(16, 19, 17, 0.28);
+  }
+  .mod.is-past { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 0 0 1px rgba(16, 19, 17, 0.05); }
+  .mod.is-muted { box-shadow: inset 0 0 0 1px rgba(16, 19, 17, 0.05); }
+  .mod__head { margin-bottom: 10px; }
+  .mod__kind { font-size: 12.5px; font-weight: 600; letter-spacing: 0.015em; }
+  .mod__kind svg { width: 16px; height: 16px; }
+  .mod__actions { gap: 4px; margin-top: 14px; }
+  .pill { font-size: 11.5px; padding: 5px 9px; background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7); }
+  .pill--ok { background: var(--green-wash); }
+  .pill--warn { background: var(--amber-wash); }
+
+  .row { padding: 12px 0; border-top-color: var(--hair); }
+  .who { padding-bottom: 12px; }
+  .who__pic { width: 42px; height: 42px; font-size: 14px; background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8); }
+  .who__txt b { font-size: 16.5px; }
+  .who__txt span { font-size: 13.5px; }
+  .money { font-size: 19px; font-weight: 600; }
+  .keyfact b { font-size: 32px; font-weight: 600; }
+  .gauge__top b { font-weight: 600; }
+  .sum .sum__total { font-weight: 600; }
+  .fine { font-size: 12.5px; }
+  .inline-input { height: 40px; border-radius: 14px; background: var(--tint); }
+
+  /* choices are small glass capsules. The chosen one is dark tinted glass. */
+  .opt span {
+    min-height: 42px;
+    background: var(--tint);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    font-size: 14.5px;
+  }
+  .opt input:checked + span {
+    background-color: var(--ink);
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 16px -10px rgba(16, 19, 17, 0.7);
+  }
+  .opts--days span { height: 54px; border-radius: 18px; }
+  .opts--days b { font-size: 16.5px; }
+  .opts--list span { border-radius: 16px; }
+
+  /* the two way switch: a dark glass lens slides to the chosen side */
+  .opts--seg {
+    position: relative;
+    display: grid; grid-template-columns: 1fr 1fr;
+    padding: 3px;
+    background: var(--tint);
+    box-shadow: inset 0 1px 2px rgba(16, 19, 17, 0.06), inset 0 -1px 0 rgba(255, 255, 255, 0.7);
+  }
+  .opts--seg::before {
+    content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px;
+    width: calc(50% - 3px);
+    border-radius: 999px;
+    background-color: var(--ink);
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 14px -8px rgba(16, 19, 17, 0.7);
+    transition: transform 0.38s var(--ease);
+  }
+  .opts--seg:has(.opt:nth-child(2) input:checked)::before { transform: translateX(100%); }
+  .opts--seg .opt span {
+    position: relative;
+    min-height: 38px;
+    background: transparent; box-shadow: none;
+    transition: color 0.25s ease, background-color 0.01s linear 0s;
+  }
+  /* the chosen side takes the lens color once the lens has arrived (keeps it solid if :has is missing) */
+  .opts--seg input:checked + span { background-color: var(--ink); background-image: none; box-shadow: none; color: #fff; transition: color 0.25s ease, background-color 0.01s linear 0.36s; }
+  @media (pointer: coarse) { .opts--seg .opt span { min-height: 42px; } }
+
+  /* buttons are capsules. The main one is green tinted glass. */
+  .btn { min-height: 48px; border-radius: 999px; font-size: 15.5px; letter-spacing: -0.005em; }
+  .btn--primary {
+    background-color: var(--green);
+    background-image: linear-gradient(180deg, #128543 0%, #0b6b35 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 0 rgba(0, 0, 0, 0.16), 0 12px 22px -14px rgba(14, 122, 62, 0.85);
+  }
+  .btn--quiet { background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(16, 19, 17, 0.03); }
+  .btn--danger {
+    background-color: var(--red-ink);
+    background-image: linear-gradient(180deg, #c7342b 0%, #a3211a 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 22px -14px rgba(179, 38, 30, 0.8);
+  }
+  .btn--text { min-height: 42px; font-size: 15px; }
+  @media (hover: hover) {
+    .btn--primary:hover { background-image: linear-gradient(180deg, #0f7a3d 0%, #0a6130 100%); background-color: #0c6c37; }
+    .btn--quiet:hover { background: rgba(16, 19, 17, 0.07); }
+  }
+  .item em { background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8); font-size: 13.5px; padding: 7px 12px; }
+  .item__dot { background: var(--tint); }
+  .copays div { background: var(--tint); border-radius: 16px; }
+  .alert { border-radius: 20px; }
+  .meter { height: 7px; }
+
+  /* the member ID card gets a glass sheen */
+  .idcard { border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 30px -20px rgba(16, 19, 17, 0.6); }
+  .idcard::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(115deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.08) 100%);
+  }
+
+  /* ---------- words ---------- */
+  .ask { padding: 9px 15px; border-radius: 20px; background: var(--tint); font-size: 15.5px; }
+  .say { font-size: clamp(18.5px, 4.7vw, 21px); line-height: 1.38; margin: 16px 0 14px; }
+  .say--after { margin: 16px 0 0; }
+  .hello__title { font-size: clamp(30px, 7vw, 44px); letter-spacing: -0.025em; }
+  .turn { padding: 16px 0 24px; }
+
+  @media (max-width: 560px) {
+    :root { --h: 56px; }
+    .icon-btn { margin-left: 6px; }
+    .mod { border-radius: 26px; }
+  }
+  @media (max-height: 460px) { :root { --h: 50px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .bar::before, .bar__aura { animation: none !important; }
+    .opts--seg::before { transition: none; }
+    .opts--seg input:checked + span { transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -747,6 +984,7 @@
     <div class="chips" id="chips" role="group" aria-label="Things you can ask"></div>
 
     <form class="bar" id="bar" autocomplete="off" novalidate>
+      <span class="bar__aura" aria-hidden="true"></span>
       <div class="avatar" id="avatar" aria-hidden="true">
         <span class="avatar__halo"></span>
         <span class="avatar__body"></span>
@@ -2001,6 +2239,9 @@
 
     let followTimer = 0;
     function follow(px, py) {
+      // the bright spot on the glass slides toward the pointer
+      const br = bar.getBoundingClientRect();
+      bar.style.setProperty("--lx", clamp(((px - br.left) / br.width) * 100, 4, 78).toFixed(1) + "%");
       if (reduceMotion.matches || mode === "thinking") return;
       mode = "follow";
       lookAtPoint(px, py);
@@ -2048,7 +2289,11 @@
       resize() { readSize(); render(); },
       blink,
       lookAtEl,
-      think(on) { if (reduceMotion.matches) return; if (on) setMode("thinking"); else { setMode("idle"); wander(); } },
+      think(on) {
+        bar.classList.toggle("is-thinking", !!on);          // the gradient border flows faster while it thinks
+        if (reduceMotion.matches) return;
+        if (on) setMode("thinking"); else { setMode("idle"); wander(); }
+      },
       sent(el) {
         if (reduceMotion.matches) return;
         eyes.hopV -= 1.5; eyes.openTarget = 0.5; eyes.glowTarget = 1.15; wake();

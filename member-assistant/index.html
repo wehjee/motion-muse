@@ -33,6 +33,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
 <meta name="color-scheme" content="light" />
 <meta name="theme-color" content="#ffffff" />
+<!-- lets a phone open this full screen from the home screen, like an app -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Assistant" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
 <title>Member assistant</title>
 <style>
   :root {
@@ -1975,6 +1982,12 @@
   window.addEventListener("orientationchange", onResize);
 
   /* ---- start ---- */
+  // the app manifest only works from a web address, so skip it when this is opened as a plain file
+  if (location.protocol.indexOf("http") === 0) {
+    const link = document.createElement("link");
+    link.rel = "manifest"; link.href = "manifest.webmanifest";
+    document.head.appendChild(link);
+  }
   const now = new Date();
   $("#today").textContent = fmt(now, { weekday: "long", month: "long", day: "numeric" });
   const hour = now.getHours();

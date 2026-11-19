@@ -15,17 +15,20 @@
     Hairline ............. rgba(16,19,17,0.08)
     Green (actions) ...... #0e7a3e   Green text #0b6b35   Green wash #e8f6ed
     Amber / red .......... #8a5a00 on #fdf3dc / #b3261e on #fdecea
-    Chat bar ............. liquid glass capsule (blurred, 50 to 82% white, bright rim) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
-    Bar border ........... green gradient ring (#d9fbe7, #8ef0b0, #3acb78, #0e7a3e) that flows on focus and while thinking
+    Chat bar ............. Liquid Glass capsule (blurred, 64 to 84% of a near white) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
+    Gradient border ...... at rest a hairline, mint to soft green to emerald. On focus and while thinking a 1.5px ring
+                           of greens (#0e7a3e / #14964b / #2fbf71 / #6fe39d / #b9f6d0) that travels around the capsule, with a soft glow
+    Glass ................ chat bar, suggestion chips, the top tag and the lens in the two way switch. Cards are plain white sheets
 
   TYPOGRAPHY
     Assistant voice ...... system serif (New York / Georgia), 20 to 22px
-    Interface ............ system sans, 16px base, 13px labels
+    Interface ............ system sans, 16px base, 13px labels. Weights: 400 text, 500 emphasis, 600 names, totals and buttons
     Greeting ............. system serif, 32 to 46px
 
   SHAPES
-    Card radius 26px, control radius 16px, chips full pill
-    Bar height 68px desktop / 60px phone, radius 0.34 of height
+    Card radius 28px (26px phone), buttons and chips are capsules, tiles 16px
+    Bar height 60px desktop / 56px phone, a full capsule (radius is half the height)
+    Chips 36px tall, choice chips 38px, each with a 44px tall tap area
     Column max width 640px, cards max width 440px
 -->
 <html lang="en">
@@ -50,7 +53,7 @@
     --ink-3: #6b716c;
     --wash: #f4f5f2;
     --wash-2: #eceee9;
-    --line: rgba(16, 19, 17, 0.08);
+    --line: rgba(16, 19, 17, 0.07);
     --green: #0e7a3e;
     --green-ink: #0b6b35;
     --green-wash: #e8f6ed;
@@ -61,12 +64,33 @@
     --green-hi: #8ef0b0;
     --green-mid: #3acb78;
     --green-lo: #14964b;
-    --h: 68px;
+    --h: 60px;
     --gutter: 20px;
     --kb: 0px;
+    --pad: 20px;                 /* card padding */
+    --r-card: 28px;              /* card radius. Controls inside are capsules or 16px tiles */
+    --hair: 1px;                 /* finest line the screen can draw */
+    --rim: rgba(16, 19, 17, 0.09);
+    --ring-rest: rgba(26, 128, 76, 0.2);       /* the quiet middle of the resting gradient hairline */
+    --ring-rest-o: 0.66;                       /* a 1px line carries more weight than a true hairline, so it is drawn lighter */
     --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
+    --spring: cubic-bezier(0.3, 1.22, 0.46, 1);  /* a small overshoot, like something with weight settling */
     --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+
+    /* Liquid Glass recipe, shared by everything that floats (chat bar, chips, tag) */
+    --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.56) 100%);
+    --glass-rim:
+      inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.9),
+      inset 1px 1.5px 0.5px -0.5px #fff,                              /* specular, strongest top left */
+      inset -0.75px -1px 0.5px -0.5px rgba(255, 255, 255, 0.72);      /* and a fainter one bottom right */
+    --glass-depth: inset 0 -7px 9px -8px rgba(16, 19, 17, 0.1);       /* soft inner shade: the glass has thickness */
+    --glass-edge: 0 0 0 var(--hair) var(--rim);
+    --glass-drop: 0 1px 2px rgba(16, 19, 17, 0.04), 0 6px 14px -8px rgba(16, 19, 17, 0.16);
+    --ring-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  }
+  @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+    :root { --hair: 0.5px; --rim: rgba(16, 19, 17, 0.14); --ring-rest: rgba(26, 128, 76, 0.34); --ring-rest-o: 1; }
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -108,22 +132,29 @@
     top: calc(12px + env(safe-area-inset-top, 0px));
     right: max(14px, env(safe-area-inset-right, 0px));
     z-index: 5;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 500;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     color: var(--ink-3);
-    background: rgba(255, 255, 255, 0.86);
-    padding: 5px 10px;
+    padding: 6px 11px;
     border-radius: 999px;
-    box-shadow: inset 0 0 0 1px var(--line);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
     pointer-events: none;
     transition: opacity 0.3s ease;
   }
   .has-flow .tag { opacity: 0; }
+  /* top edge: what scrolls up under it goes soft, then pale */
   .app::before {
     content: ""; position: absolute; top: 0; left: 0; right: 0;
-    height: calc(22px + env(safe-area-inset-top, 0px));
-    background: linear-gradient(to bottom, var(--page) 30%, rgba(255, 255, 255, 0));
+    height: calc(36px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.62) 50%, rgba(255, 255, 255, 0) 100%);
+    -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
     pointer-events: none;
     z-index: 3;
   }
@@ -136,11 +167,11 @@
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    scroll-padding-bottom: calc(var(--dock-h, 150px) + 16px);
+    scroll-padding-bottom: calc(var(--dock-h, 134px) + 16px);
     padding:
       calc(12px + env(safe-area-inset-top, 0px))
       max(var(--gutter), env(safe-area-inset-right, 0px))
-      calc(var(--dock-h, 150px) + 8px)
+      calc(var(--dock-h, 134px) + 8px)
       max(var(--gutter), env(safe-area-inset-left, 0px));
     outline: none;
   }
@@ -152,20 +183,20 @@
 
   .hello { padding: clamp(40px, 11vh, 120px) 0 6px; }
   .hello__date {
-    font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
-    color: var(--ink-3); margin-bottom: 14px;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.01em;
+    color: var(--ink-3); margin-bottom: 12px;
   }
   .hello__title {
     font-family: var(--serif);
     font-weight: 400;
     font-size: clamp(32px, 7.4vw, 46px);
-    line-height: 1.08;
-    letter-spacing: -0.02em;
+    line-height: 1.1;
+    letter-spacing: -0.022em;
     text-wrap: balance;
   }
   .hello__title span { display: block; }
   .hello__sub { color: #8a908b; }
-  .hello__nudge { margin-top: clamp(22px, 4.5vh, 40px); }
+  .hello__nudge { margin-top: clamp(24px, 4.5vh, 40px); }
 
   /* ---------- conversation ---------- */
 
@@ -174,7 +205,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: 18px 0 26px;
+    padding: 16px 0 28px;
     scroll-margin-top: 44px;
   }
   .turn:last-child { min-height: var(--turn-min, 0px); }
@@ -182,10 +213,11 @@
   .ask {
     align-self: flex-end;
     max-width: 84%;
-    padding: 10px 15px;
-    border-radius: 20px 20px 6px 20px;
+    padding: 9px 15px;
+    border-radius: 20px 20px 7px 20px;
     background: var(--wash);
     font-size: 16px;
+    letter-spacing: -0.003em;
     overflow-wrap: anywhere;
     animation: rise 0.45s var(--ease) both;
   }
@@ -194,49 +226,51 @@
     font-family: var(--serif);
     font-size: clamp(19px, 4.9vw, 22px);
     line-height: 1.36;
-    letter-spacing: -0.01em;
-    margin: 18px 0 16px;
+    letter-spacing: -0.012em;
+    margin: 20px 0 16px;
     max-width: 30em;
     text-wrap: pretty;
   }
   .say .w { display: inline-block; animation: word 0.5s var(--ease) both; animation-delay: calc(var(--i) * 34ms); }
-  .say--after { margin: 18px 0 0; }
+  .say--after { margin: 20px 0 0; }
   .say { outline: none; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @keyframes word { from { opacity: 0; transform: translateY(5px); filter: blur(5px); } to { opacity: 1; transform: none; filter: blur(0); } }
 
-  /* ---------- cards ("modules") ---------- */
+  /* ---------- cards ("modules") ----------
+     Cards are not glass. They are crisp, light sheets with one fine rim, so the floating glass reads above them. */
 
   .mod {
     position: relative;
     width: min(100%, 440px);
-    padding: 18px;
-    border-radius: 26px;
+    padding: var(--pad);
+    border-radius: var(--r-card);
     background: #fff;
     box-shadow:
-      inset 0 0 0 1px var(--line),
-      0 1px 2px rgba(16, 19, 17, 0.04),
-      0 18px 40px -18px rgba(16, 19, 17, 0.18);
+      0 0 0 var(--hair) var(--rim),
+      0 1px 2px rgba(16, 19, 17, 0.03),
+      0 18px 36px -24px rgba(16, 19, 17, 0.2);
     transform-origin: 85% 100%;                /* cards grow out of the avatar's corner */
     animation: mod-in 0.55s var(--ease) both;
     transition: box-shadow 0.5s ease, background 0.5s ease;
   }
   /* "fog": only the newest answer is at full strength */
-  .mod.is-past { background: #fbfbfa; box-shadow: inset 0 0 0 1px var(--line); }
+  .mod.is-past { background: #fcfcfb; box-shadow: 0 0 0 var(--hair) var(--rim); }
   @keyframes mod-in {
     from { opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(6px); }
     to   { opacity: 1; transform: none; filter: blur(0); }
   }
 
-  .mod__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; min-height: 24px; }
-  .mod__kind { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; color: var(--ink-2); }
-  .mod__kind svg { width: 17px; height: 17px; flex: none; }
-  .mod__actions { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+  .mod__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; min-height: 24px; }
+  .mod__kind { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; letter-spacing: 0.01em; color: var(--ink-2); }
+  .mod__kind svg { width: 16px; height: 16px; flex: none; stroke-width: 1.6; }
+  .mod__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .mod__actions .btn + .btn--text { margin-top: -4px; }     /* a text button carries its own air */
   .mod__actions:empty { display: none; }
 
   .pill {
-    font-size: 12px; font-weight: 600; line-height: 1;
+    font-size: 12px; font-weight: 600; line-height: 1; letter-spacing: 0.01em;
     padding: 6px 10px; border-radius: 999px;
     background: var(--wash); color: var(--ink-2);
     white-space: nowrap;
@@ -246,7 +280,7 @@
 
   /* a card is first "composed": soft bars shimmer, then the real parts arrive one by one */
   .mod__ghost {
-    position: absolute; inset: 18px;
+    position: absolute; inset: var(--pad);
     display: grid; align-content: start; gap: 12px;
     pointer-events: none;
     transition: opacity 0.25s ease;
@@ -261,7 +295,7 @@
   .mod__ghost i:nth-child(2) { width: 78%; height: 40px; border-radius: 14px; margin-top: 6px; }
   .mod__ghost i:nth-child(3) { width: 92%; }
   .mod__ghost i:nth-child(4) { width: 64%; }
-  .mod__ghost i:nth-child(5) { width: 100%; height: 46px; border-radius: 16px; margin-top: 8px; }
+  .mod__ghost i:nth-child(5) { width: 100%; height: 46px; border-radius: 999px; margin-top: 8px; }
   @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -100% 0; } }
 
   .mod.is-composing > :not(.mod__ghost) { visibility: hidden; }
@@ -269,118 +303,172 @@
   .mod.is-built .part { animation: part-in 0.5s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
   @keyframes part-in { from { opacity: 0; transform: translateY(8px); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
 
-  .mod.is-muted { box-shadow: inset 0 0 0 1px var(--line); }
+  .mod.is-muted { box-shadow: 0 0 0 var(--hair) var(--rim); }
   .mod.is-muted .opts, .mod.is-muted .inline-input { opacity: 0.55; }     /* only the switched off controls fade, the words stay readable */
   .mod.is-muted .done__check { background: var(--wash); color: var(--ink-2); }
 
-  /* rows inside a card */
+  /* rows inside a card: no rules between them, the label column and even spacing do the work */
   .row {
     display: grid;
-    grid-template-columns: 70px minmax(0, 1fr);
+    grid-template-columns: 78px minmax(0, 1fr);
     gap: 4px 12px;
-    align-items: center;
-    padding: 11px 0;
-    border-top: 1px solid var(--line);
+    align-items: baseline;
+    padding: 8px 0;
   }
-  .row__label { font-size: 13px; color: var(--ink-3); }
+  .row:has(.opts), .row:has(.inline-input) { align-items: center; }
+  .row__label { font-size: 13px; letter-spacing: 0.005em; color: var(--ink-3); }
   .row__val { min-width: 0; font-size: 15.5px; overflow-wrap: anywhere; }
-  .row__val b { font-weight: 600; }
-  .note { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+  .row__val b { font-weight: 500; }
+  .note { display: block; font-size: 13px; line-height: 1.4; color: var(--ink-2); margin-top: 2px; }
   /* a row that was just changed by typing glows green for a moment */
   .mod.is-built .row.flash { animation: part-in 0.5s var(--ease) both, flash 1.1s ease; }
   @keyframes flash {
     0%, 35% { background: var(--green-wash); box-shadow: 0 0 0 6px var(--green-wash); border-radius: 10px; }
     100% { background: transparent; box-shadow: 0 0 0 6px transparent; border-radius: 10px; }
   }
-  .money { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-  .ok { color: var(--green-ink); font-style: normal; font-weight: 600; }
-  .fine { font-size: 12.5px; line-height: 1.45; color: var(--ink-3); margin-top: 12px; }
+  .row__val b.money, .money { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; }
+  .ok { color: var(--green-ink); font-style: normal; font-weight: 500; }
+  .fine { font-size: 13px; line-height: 1.45; color: var(--ink-3); margin-top: 10px; }
 
-  .who { display: flex; align-items: center; gap: 12px; padding: 2px 0 14px; }
+  .who { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
   .who__pic {
-    flex: none; width: 46px; height: 46px; border-radius: 50%;
+    flex: none; width: 44px; height: 44px; border-radius: 50%;
     display: grid; place-items: center;
     background: var(--wash); color: var(--ink-2);
     font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
   }
-  .who__txt { min-width: 0; display: grid; }
-  .who__txt b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .who__txt { min-width: 0; display: grid; gap: 1px; }
+  .who__txt b { font-size: 17px; font-weight: 600; letter-spacing: -0.012em; }
   .who__txt span { font-size: 14px; color: var(--ink-2); }
 
   .inline-input {
     width: 100%; height: 40px;
-    padding: 0 12px;
-    border: 0; border-radius: 12px;
+    padding: 0 14px;
+    border: 0; border-radius: 999px;
     background: var(--wash);
     font-size: 16px;
     outline: none;
     transition: box-shadow 0.2s ease, background 0.2s ease;
   }
-  .inline-input:focus { background: #fff; box-shadow: inset 0 0 0 2px var(--green); }
+  .inline-input:focus { background: #fff; box-shadow: inset 0 0 0 1.5px var(--green); }
 
   /* choice chips (real radio inputs underneath) */
   .opts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
   .opt { position: relative; display: block; }
-  .opt input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  /* the shape is slim, the tap area is still 44px tall */
+  .opt input { position: absolute; opacity: 0; left: 0; top: -3px; width: 100%; height: calc(100% + 6px); margin: 0; cursor: pointer; }
   .opt span {
     display: grid; place-items: center;
-    min-height: 44px; padding: 0 14px;
+    min-height: 38px; padding: 0 14px;
     border-radius: 999px;
     background: var(--wash);
-    font-size: 15px; font-weight: 500;
+    font-size: 15px; font-weight: 500; letter-spacing: -0.003em;
     white-space: nowrap;
     transition: background 0.18s ease, color 0.18s ease, transform 0.18s var(--ease);
   }
   .opt input:checked + span { background: var(--ink); color: #fff; }
   .opt input:focus-visible + span { outline: 2px solid var(--green); outline-offset: 2px; }
-  .opt:active span { transform: scale(0.95); }
+  .opt:active span { transform: scale(0.96); }
   .opts--days { flex-wrap: nowrap; }
-  .opts--days .opt { flex: 1 1 0; min-width: 44px; max-width: 64px; }
-  .opts--days span { height: 58px; padding: 0; border-radius: 16px; line-height: 1.1; align-content: center; gap: 2px; }
-  .opts--days small { font-size: 11.5px; font-weight: 500; opacity: 0.7; }
-  .opts--days b { font-size: 17px; font-weight: 600; }
-  .opts--seg { flex-wrap: nowrap; padding: 3px; border-radius: 999px; background: var(--wash); gap: 0; width: fit-content; max-width: 100%; }
-  .opts--seg span { background: transparent; min-height: 38px; }
+  .opts--days .opt { flex: 1 1 0; min-width: 44px; max-width: 62px; }
+  .opts--days .opt input, .opts--list .opt input { top: 0; height: 100%; }
+  .opts--days span { height: 54px; padding: 0; border-radius: 16px; line-height: 1.1; align-content: center; gap: 2px; }
+  .opts--days small { font-size: 12px; font-weight: 500; opacity: 0.72; }
+  .opts--days b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+
+  /* the two way switch: a recessed track with a smoked glass lens that slides to the chosen side */
+  .opts--seg {
+    position: relative;
+    display: inline-grid; grid-template-columns: 1fr 1fr;
+    padding: 3px; gap: 0;
+    border-radius: 999px;
+    background: var(--wash);
+    box-shadow: inset 0 0 0 var(--hair) rgba(16, 19, 17, 0.05), inset 0 1px 2px rgba(16, 19, 17, 0.05);
+    width: fit-content; max-width: 100%;
+  }
+  .opts--seg .opt { z-index: 1; }
+  .opts--seg .opt input { top: -4px; height: calc(100% + 8px); }
+  .opts--seg span { background: transparent; min-height: 36px; padding: 0 18px; transition: color 0.25s ease, transform 0.18s var(--ease); }
   .opts--seg input:checked + span { background: var(--ink); color: #fff; }
+  @supports selector(:has(*)) {
+    .opts--seg::before {
+      content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px;
+      width: calc(50% - 3px);
+      border-radius: 999px;
+      background: linear-gradient(180deg, #2c312e 0%, #171a18 52%, #101311 100%);
+      box-shadow:
+        inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.2),
+        inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.36),
+        inset -0.5px -0.75px 0.5px rgba(255, 255, 255, 0.12),
+        0 1px 1.5px rgba(16, 19, 17, 0.22),
+        0 4px 8px -4px rgba(16, 19, 17, 0.3);
+      transition: transform 0.46s var(--spring), scale 0.3s var(--ease);
+    }
+    .opts--seg:has(.opt:last-child input:checked)::before { transform: translateX(100%); }
+    .opts--seg:active::before { scale: 1.03 1.07; }
+    /* the lens carries the fill, so the chosen side keeps its dark color but only paints it under its own letters */
+    .opts--seg input:checked + span { -webkit-background-clip: text; background-clip: text; }
+    .opts--seg .opt:active span { transform: none; }
+  }
 
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    min-height: 50px; padding: 0 18px;
-    border-radius: 16px;
-    font-size: 16px; font-weight: 600;
+    min-height: 48px; padding: 8px 20px;
+    border-radius: 24px;
+    font-size: 16px; font-weight: 600; letter-spacing: -0.005em;
     text-align: center;
-    transition: transform 0.18s var(--ease), background 0.18s ease, opacity 0.18s ease;
+    transition: transform 0.18s var(--ease), background 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
   }
   a.btn { text-decoration: none; }
   .btn:active { transform: scale(0.97); }
-  .btn--primary { background: var(--green); color: #fff; }
+  /* the primary action is tinted glass: green all the way through, a bright rim on top, its own soft green shadow */
+  .btn--primary {
+    background: linear-gradient(180deg, #0f8243 0%, #0e7a3e 50%, #0c7039 100%);
+    color: #fff;
+    box-shadow:
+      inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.24),
+      inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.46),
+      inset -0.5px -0.75px 0.5px rgba(255, 255, 255, 0.16),
+      inset 0 -9px 12px -9px rgba(3, 52, 24, 0.42),
+      0 1px 2px rgba(11, 107, 53, 0.22),
+      0 12px 22px -14px rgba(14, 122, 62, 0.62);
+  }
   .btn--quiet { background: var(--wash); color: var(--ink); }
   .btn--text { min-height: 44px; color: var(--ink-2); font-weight: 500; }
-  .btn--danger { background: var(--red-ink); color: #fff; }
+  .btn--danger {
+    background: linear-gradient(180deg, #bb2c23 0%, #b3261e 50%, #a8221b 100%);
+    color: #fff;
+    box-shadow:
+      inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.22),
+      inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.4),
+      inset 0 -9px 12px -9px rgba(90, 10, 6, 0.5),
+      0 1px 2px rgba(179, 38, 30, 0.22),
+      0 12px 22px -14px rgba(179, 38, 30, 0.6);
+  }
   @media (hover: hover) {
-    .btn--primary:hover { background: #0c6c37; }
+    .btn--primary:hover, .btn--danger:hover { filter: brightness(0.94); }
     .btn--quiet:hover { background: var(--wash-2); }
     .btn--text:hover { color: var(--ink); }
   }
 
   /* booked / done state */
-  .done { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; outline: none; }
+  .done { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; outline: none; }
   .mod__kind { outline: none; }
   .done__check {
-    flex: none; width: 46px; height: 46px; border-radius: 50%;
+    flex: none; width: 44px; height: 44px; border-radius: 50%;
     display: grid; place-items: center;
     background: var(--green-wash); color: var(--green-ink);
   }
-  .done__check svg { width: 24px; height: 24px; }
+  .done__check svg { width: 22px; height: 22px; }
   .done__check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw 0.5s 0.15s var(--ease) forwards; }
   @keyframes draw { to { stroke-dashoffset: 0; } }
-  .done b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .done b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.014em; }
   .done span { font-size: 14.5px; color: var(--ink-2); }
 
   /* row of cards you can swipe (find care) */
   .strip {
     align-self: stretch;
-    display: flex; gap: 12px;
+    display: flex; gap: 10px;
     overflow-x: auto;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
@@ -389,33 +477,36 @@
     scroll-padding-left: var(--gutter);
   }
   .strip::-webkit-scrollbar { display: none; }
-  .strip .mod { flex: none; width: min(76vw, 264px); scroll-snap-align: start; padding: 16px; }
+  .strip .mod { flex: none; width: min(76vw, 264px); scroll-snap-align: start; padding: 16px; border-radius: 26px; }
   .strip .mod__head { justify-content: flex-start; }
+  .strip .who { padding-bottom: 10px; }
+  .strip .btn { min-height: 44px; }
   .strip + .say--after { margin-top: -6px; }
   @media (min-width: 700px) {
     .strip { overflow: visible; }
     .strip .mod { flex: 1 1 0; width: auto; min-width: 0; }
   }
-  .mini { display: grid; gap: 3px; font-size: 14px; color: var(--ink-2); padding: 0 0 4px; }
-  .mini b { color: var(--ink); font-weight: 600; }
+  .mini { display: grid; gap: 3px; font-size: 14px; color: var(--ink-2); padding: 0 0 2px; }
+  .mini b { color: var(--ink); font-weight: 500; }
 
   /* coverage */
-  .verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 2px 0 14px; }
-  .verdict b { font-family: var(--serif); font-size: 28px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.1; }
-  .meter { height: 8px; border-radius: 999px; background: var(--wash-2); overflow: hidden; margin-top: 8px; }
+  .verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 0 0 10px; }
+  .verdict b { font-family: var(--serif); font-size: 28px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.12; }
+  .meter { height: 6px; border-radius: 999px; background: var(--wash-2); overflow: hidden; margin-top: 10px; }
   .meter i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--green-mid), var(--green-lo)); transition: width 1.1s var(--ease) 0.25s; }
 
   /* usage */
-  .gauge { padding: 12px 0; border-top: 1px solid var(--line); }
+  .gauge { padding: 4px 0 14px; }
+  .gauge + .gauge { padding-top: 10px; }
   .gauge__top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   .gauge__top span { font-size: 13px; color: var(--ink-3); }
-  .gauge__top b { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-  .gauge__top em { font-style: normal; font-size: 14px; font-weight: 400; color: var(--ink-2); }
+  .gauge__top b { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; }
+  .gauge__top em { font-style: normal; font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
 
   /* claim */
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 0 14px; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); padding: 4px 0 14px; }
   .step { position: relative; padding-top: 20px; font-size: 13px; color: var(--ink-3); }
-  .step b { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .step b { display: block; font-size: 14px; font-weight: 500; color: var(--ink); }
   .step::before {
     content: ""; position: absolute; top: 2px; left: 0;
     width: 10px; height: 10px; border-radius: 50%;
@@ -430,35 +521,38 @@
   .step.is-next b { color: var(--ink-2); }
 
   /* cost estimate */
-  .keyfact { padding: 0 0 12px; }
-  .keyfact b { display: block; font-size: 34px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .keyfact { padding: 0 0 10px; }
+  .keyfact b { display: block; font-size: 34px; font-weight: 600; letter-spacing: -0.032em; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .keyfact span { font-size: 14.5px; color: var(--ink-2); }
   .opts--list { flex-direction: column; flex-wrap: nowrap; }
-  .opts--list span { display: flex; justify-content: space-between; gap: 12px; border-radius: 14px; padding: 0 14px; min-height: 48px; white-space: normal; text-align: left; }
+  .opts--list span { display: flex; justify-content: space-between; gap: 12px; border-radius: 16px; padding: 0 16px; min-height: 48px; white-space: normal; text-align: left; }
   .opts--list span b { font-weight: 500; }
-  .opts--list span em { font-style: normal; font-weight: 650; font-variant-numeric: tabular-nums; }
-  .math { border-top: 1px solid var(--line); }
-  .math summary { list-style: none; cursor: pointer; padding: 12px 0; font-size: 14.5px; font-weight: 600; color: var(--green-ink); display: flex; justify-content: space-between; align-items: center; }
+  .opts--list span em { font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .math { margin-top: 2px; }
+  .math summary { list-style: none; cursor: pointer; padding: 10px 0; min-height: 44px; font-size: 14.5px; font-weight: 600; color: var(--green-ink); display: flex; justify-content: space-between; align-items: center; }
   .math summary::-webkit-details-marker { display: none; }
-  .math summary::after { content: "+"; font-size: 20px; font-weight: 400; line-height: 1; }
+  .math summary::after { content: "+"; font-size: 20px; font-weight: 300; line-height: 1; }
   .math[open] summary::after { content: "\2212"; }
   .math .sum { border-top: 0; padding-top: 0; padding-bottom: 6px; font-size: 14.5px; }
   .math .sum div span:first-child { max-width: 70%; }
-  .sum { display: grid; gap: 7px; padding: 12px 0 2px; border-top: 1px solid var(--line); font-size: 15px; }
+  .sum { display: grid; gap: 8px; padding: 4px 0 2px; font-size: 15px; }
   .sum div { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
-  .sum .sum__total { color: var(--ink); font-weight: 650; font-size: 17px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .sum div span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* the one rule a sum needs: the line above the total */
+  .sum .sum__total { color: var(--ink); font-weight: 600; font-size: 17px; letter-spacing: -0.01em; margin-top: 2px; padding-top: 10px; border-top: 1px solid var(--line); }
 
   /* member ID card */
   .idcard {
     position: relative;
     aspect-ratio: 1.586;
-    border-radius: 18px;
+    border-radius: 20px;
     padding: 16px 18px;
     display: flex; flex-direction: column; justify-content: space-between;
     color: #fff;
     background:
       radial-gradient(90% 120% at 108% -10%, rgba(142, 240, 176, 0.95) 0%, rgba(58, 203, 120, 0.85) 22%, rgba(20, 150, 75, 0.55) 44%, rgba(18, 39, 30, 0) 72%),
       #121413;
+    box-shadow: inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.2), inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.3), 0 10px 22px -16px rgba(16, 19, 17, 0.55);
     overflow: hidden;
   }
   .idcard__plan { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
@@ -466,89 +560,114 @@
   .idcard__grid { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 13px; }
   .idcard__grid span { opacity: 0.62; display: block; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
   .idcard__grid b { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-  .copays { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; text-align: center; }
-  .copays div { padding: 9px 2px; border-radius: 14px; background: var(--wash); font-size: 11.5px; color: var(--ink-2); }
-  .copays b { display: block; font-size: 16px; font-weight: 650; color: var(--ink); }
+  .copays { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; text-align: center; }
+  .copays div { padding: 9px 2px; border-radius: 16px; background: var(--wash); font-size: 12px; color: var(--ink-2); }
+  .copays b { display: block; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 
   /* today (home) */
-  .item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
-  .item:first-child { border-top: 0; padding-top: 2px; }
-  .item__dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--wash); color: var(--ink-2); }
-  .item__dot svg { width: 18px; height: 18px; }
+  .item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 0; text-align: left; }
+  .item:first-child { padding-top: 0; }
+  .item:last-child { padding-bottom: 0; }
+  .item__dot { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--wash); color: var(--ink-2); }
+  .item__dot svg { width: 18px; height: 18px; stroke-width: 1.6; }
   .item.is-done .item__dot { background: var(--green-wash); color: var(--green-ink); }
-  .item__txt { flex: 1 1 auto; min-width: 0; display: grid; }
-  .item__txt b { font-size: 15.5px; font-weight: 600; }
+  .item__txt { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+  .item__txt b { font-size: 15.5px; font-weight: 500; letter-spacing: -0.006em; }
   .item__txt span { font-size: 13.5px; color: var(--ink-2); }
-  .item em { flex: none; font-style: normal; font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 999px; background: var(--wash); transition: background 0.18s ease; }
+  .item em { flex: none; font-style: normal; font-size: 14px; font-weight: 500; padding: 7px 13px; border-radius: 999px; background: var(--wash); transition: background 0.18s ease; }
   @media (hover: hover) { button.item:hover em { background: var(--wash-2); } }
 
   /* urgent */
-  .alert { display: block; text-decoration: none; padding: 14px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+  .alert { display: block; text-decoration: none; padding: 14px 16px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 8px; }
   a.choice { text-decoration: none; color: inherit; }
   .alert span { display: block; font-weight: 400; font-size: 14px; margin-top: 2px; }
-  .choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
-  .choice b { display: block; font-weight: 600; font-size: 15.5px; }
+  .choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 0; text-align: left; }
+  .choice b { display: block; font-weight: 500; font-size: 15.5px; letter-spacing: -0.006em; }
   .choice span { font-size: 13.5px; color: var(--ink-2); }
-  .choice em { font-style: normal; font-weight: 600; font-size: 15px; white-space: nowrap; }
+  .choice em { font-style: normal; font-weight: 600; font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-  /* ---------- dock: suggestions + chat bar ---------- */
+  /* ---------- dock: suggestions + chat bar (the floating glass layer) ---------- */
 
   .dock {
     position: absolute; left: 0; right: 0; bottom: 0;
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 0;
     padding:
-      18px
+      12px
       max(12px, env(safe-area-inset-right, 0px))
-      max(14px, env(safe-area-inset-bottom, 0px))
+      max(12px, env(safe-area-inset-bottom, 0px))
       max(12px, env(safe-area-inset-left, 0px));
     z-index: 4;
     pointer-events: none;                      /* taps fall through the empty parts */
   }
   .dock > * { pointer-events: auto; }
-  /* frosted veil: whatever scrolls under the dock goes soft and pale */
-  .dock::before {
-    content: ""; position: absolute; inset: 0;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0, rgba(255, 255, 255, 0.62) 46px, rgba(255, 255, 255, 0.8) 100%);
-    -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
-            mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
+  /* scroll edge: whatever slides under the dock first goes a little soft, then frosts over and turns pale */
+  .dock::before, .dock::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0;
     pointer-events: none;
     z-index: -1;
   }
-  .kb-open .dock { padding-bottom: 10px; }
+  /* two steps, one after the other: the second, stronger blur only ramps up over content the first has already
+     softened. That keeps the "sharp text with a ghost around it" look of a single masked blur away. */
+  .dock::before {
+    top: -12px;
+    -webkit-backdrop-filter: blur(3px);
+            backdrop-filter: blur(3px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  }
+  .dock::after {
+    top: 2px;
+    background:
+      /* a breath of mint around the avatar's end of the bar: the only tint on the page, there for the glass to catch */
+      radial-gradient(112px 56px at calc(50% + min(50% - 12px, 320px) - 36px) calc(100% - 24px), rgba(58, 203, 120, 0.2) 0%, rgba(58, 203, 120, 0.07) 52%, rgba(58, 203, 120, 0) 100%),
+      /* pale behind the chips and the bar, nearly white in the strip under the bar so nothing peeks out below it */
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 0, rgba(255, 255, 255, 0.5) 36px, rgba(255, 255, 255, 0.66) calc(100% - 26px), rgba(255, 255, 255, 0.93) 100%);
+    -webkit-backdrop-filter: blur(12px) saturate(1.5);
+            backdrop-filter: blur(12px) saturate(1.5);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
+  }
+  .kb-open .dock { padding-bottom: 8px; }
 
   .chips {
-    display: flex; gap: 8px;
+    display: flex; gap: 7px;
     width: min(100%, 640px);
-    min-height: 42px;
+    min-height: 52px;
     overflow-x: auto;
     scrollbar-width: none;
-    padding: 2px 2px 0;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-            mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    padding: 6px 2px 10px;                     /* room for each chip's 44px tap area and its shadow */
   }
   .chips::-webkit-scrollbar { display: none; }
+  /* wide screens: the row is as wide as the bar and melts away on the right where more chips wait.
+     (A mask on the row switches off backdrop blur inside it in some browsers, so there the chips lean on the
+     frosted veil behind them. Phones do not use the mask, see "sizes" below.) */
+  @media (min-width: 665px) {
+    .chips {
+      width: min(100% + 4px, 644px);           /* 2px of room each side for the rims, so the first chip lines up with the bar */
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+              mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+    }
+  }
   .chip {
+    position: relative;
     flex: none;
-    min-height: 40px; padding: 0 15px;
+    height: 36px; padding: 0 14px;
     border-radius: 999px;
-    box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 12px -6px rgba(16, 19, 17, 0.12);
-    background: rgba(255, 255, 255, 0.72);
-    -webkit-backdrop-filter: blur(16px) saturate(1.6);
-            backdrop-filter: blur(16px) saturate(1.6);
-    font-size: 14.5px; font-weight: 500; color: var(--ink);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
+    font-size: 14.5px; font-weight: 500; letter-spacing: -0.004em; color: var(--ink);
     white-space: nowrap;
     animation: rise 0.4s var(--ease) both;
     animation-delay: calc(var(--i, 0) * 40ms);
     transition: background 0.18s ease, transform 0.18s var(--ease);
   }
-  .chip:last-child { margin-right: 24px; }
+  .chip::after { content: ""; position: absolute; inset: -4px 0; }          /* 44px tall tap area */
+  .chip:last-child { margin-right: 32px; }
   .chip:focus-visible { outline-offset: -2px; }
-  .chip:active { transform: scale(0.95); }
-  @media (hover: hover) { .chip:hover { background: rgba(244, 245, 242, 0.92); } }
-  @media (pointer: coarse) { .chip { min-height: 44px; } .chips { min-height: 46px; } }
-  @media (pointer: coarse) { .opts--seg span { min-height: 42px; } }
+  .chip:active { transform: scale(0.96); }
+  @media (hover: hover) { .chip:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 251, 249, 0.82) 100%); } }
 
   .bar {
     position: relative;
@@ -557,74 +676,170 @@
     align-items: center;
     width: min(100%, 640px);
     height: var(--h);
-    border-radius: calc(var(--h) * 0.34);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.66) 100%);
-    -webkit-backdrop-filter: blur(26px) saturate(1.8);
-            backdrop-filter: blur(26px) saturate(1.8);
+    border-radius: calc(var(--h) / 2);         /* a true capsule. The round end and the avatar share a center */
+    /* the glass is a touch cooler than the page, so its white rim has something to shine against */
+    background: linear-gradient(180deg, rgba(252, 253, 252, 0.84) 0%, rgba(242, 245, 243, 0.64) 100%);
+    -webkit-backdrop-filter: blur(22px) saturate(1.9) brightness(1.03);
+            backdrop-filter: blur(22px) saturate(1.9) brightness(1.03);
     box-shadow:
-      0 20px 44px -20px rgba(16, 19, 17, 0.3),
-      0 3px 10px rgba(16, 19, 17, 0.07),
-      14px 14px 34px -16px rgba(40, 190, 110, 0.5);       /* a little green light under the avatar */
+      0 1px 2px rgba(16, 19, 17, 0.05),
+      0 8px 20px -10px rgba(16, 19, 17, 0.16),
+      0 26px 48px -30px rgba(16, 19, 17, 0.3);
     color: var(--ink);
-    transition: box-shadow 0.25s ease;
   }
-  /* glass edge: hairline outside, bright rim inside */
-  .bar::after {
+
+  /* --- the gradient border ---
+     1. at rest: a fine gradient hairline, mint where the light lands, emerald where the avatar lives */
+  .bar::before {
     content: ""; position: absolute; inset: 0;
     border-radius: inherit;
+    padding: var(--hair);
+    background: linear-gradient(98deg,
+      rgba(110, 226, 156, 0.85) 0%,
+      rgba(58, 203, 120, 0.55) 14%,
+      var(--ring-rest) 36%,
+      var(--ring-rest) 58%,
+      rgba(47, 191, 113, 0.7) 82%,
+      rgba(14, 122, 62, 0.9) 100%);
+    opacity: var(--ring-rest-o);
+    -webkit-mask: var(--ring-mask);
+    -webkit-mask-composite: xor;
+            mask: var(--ring-mask);
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 4;
+  }
+  /* glass body: bright rim just inside the hairline, a top light and a soft shade underneath */
+  .bar::after {
+    content: ""; position: absolute; inset: var(--hair);
+    border-radius: inherit;
     box-shadow:
-      inset 0 0 0 1px rgba(16, 19, 17, 0.08),
-      inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.55),
-      inset 0 0 18px rgba(255, 255, 255, 0.55);
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+      inset 1.5px 2px 1px -1px #fff,
+      inset -1px -1.5px 1px -1px rgba(255, 255, 255, 0.7),
+      inset 0 12px 14px -14px rgba(255, 255, 255, 0.95),
+      inset 0 -11px 14px -13px rgba(16, 19, 17, 0.16);
+    background:
+      radial-gradient(calc(var(--h) * 2.4) calc(var(--h) * 0.9) at var(--mx, 24%) 0%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 70%),
+      radial-gradient(calc(var(--h) * 3.4) 130% at 100% 60%, rgba(58, 203, 120, 0.13) 0%, rgba(58, 203, 120, 0.04) 55%, rgba(58, 203, 120, 0) 100%);
     pointer-events: none;
     z-index: 3;
+  }
+  /* 2. awake (focus, or the assistant is thinking): a slim ring whose greens travel around the capsule */
+  .bar__ring {
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    overflow: hidden;
+    -webkit-mask: var(--ring-mask);
+    -webkit-mask-composite: xor;
+            mask: var(--ring-mask);
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+    pointer-events: none;
+    z-index: 4;
+  }
+  .bar__ring i {
+    position: absolute; left: 50%; top: 50%;
+    width: 150%; height: 0; padding-bottom: 150%;        /* a square, 1.5 bars wide */
+    /* two lights a half turn apart: the strong one starts top left, the faint one bottom right */
+    background: conic-gradient(from 0deg,
+      #1fa65c 0deg, #0e7a3e 46deg, #14964b 96deg, #2fbf71 132deg,
+      #86eeae 151deg, #2fbf71 170deg, #14964b 212deg, #0e7a3e 250deg,
+      #23b066 290deg, #6fe39d 314deg, #b9f6d0 330deg, #6fe39d 346deg, #1fa65c 360deg);
+    /* squash the wheel to the bar's proportions so the colors spread evenly along the long edges */
+    transform: translate(-50%, -50%) scaleY(var(--ring-k, 0.17)) rotate(0turn);
+  }
+  @keyframes ring-flow { to { transform: translate(-50%, -50%) scaleY(var(--ring-k, 0.17)) rotate(1turn); } }
+  /* 3. a soft matching glow that sits on the edge of the glass */
+  .bar__glow {
+    position: absolute; inset: -3px;
+    border-radius: calc(var(--h) / 2 + 3px);
+    filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .bar__glow::before {
+    content: ""; position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 6px;
+    background: linear-gradient(98deg, #86eeae 0%, #46d184 30%, #25b267 62%, #14964b 100%);
+    -webkit-mask: var(--ring-mask);
+    -webkit-mask-composite: xor;
+            mask: var(--ring-mask);
+            mask-composite: exclude;
+  }
+  .bar:focus-within .bar__ring, .bar.is-thinking .bar__ring { opacity: 1; }
+  /* "is-lit" lingers a moment after focus or thinking ends, so the greens keep travelling while the ring fades out.
+     While the assistant thinks, a line of script speeds the same animation up (no restart, no jump). */
+  .bar:focus-within .bar__ring i, .bar.is-thinking .bar__ring i, .bar.is-lit .bar__ring i { animation: ring-flow 9s linear infinite; }
+  .bar:focus-within .bar__glow { opacity: 0.44; }
+  .bar.is-thinking .bar__glow { opacity: 0.68; }
+
+  /* without mask-composite there is no gradient ring: fall back to a plain hairline and a soft green focus ring */
+  @supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+    .bar::before, .bar__ring, .bar__glow { display: none; }
+    .bar { box-shadow: 0 0 0 1px var(--rim), 0 8px 20px -10px rgba(16, 19, 17, 0.16), 0 26px 48px -30px rgba(16, 19, 17, 0.3); }
+    .bar:focus-within, .bar.is-thinking { box-shadow: 0 0 0 2px rgba(20, 150, 75, 0.6), 0 0 0 5px rgba(58, 203, 120, 0.16), 0 8px 20px -10px rgba(16, 19, 17, 0.16), 0 26px 48px -30px rgba(16, 19, 17, 0.3); }
   }
 
   .icon-btn {
     flex: none;
     display: grid; place-items: center;
-    width: 48px; height: 48px;
-    margin-left: calc(var(--h) * 0.14);
-    border-radius: 14px;
+    width: 44px; height: 44px;
+    margin-left: calc((var(--h) - 44px) / 2);  /* concentric with the capsule's round end */
+    border-radius: 50%;
     color: var(--ink);
     z-index: 2;
+    /* a round lens of frosted glass: bright rim top left, a little shade underneath */
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(238, 242, 239, 0.6) 100%);
+    box-shadow:
+      inset 1px 1.5px 0.5px rgba(255, 255, 255, 0.98),
+      inset -1px -1px 0.5px rgba(255, 255, 255, 0.6),
+      inset 0 -6px 8px -7px rgba(16, 19, 17, 0.16),
+      0 0 0 var(--hair) rgba(16, 19, 17, 0.08),
+      0 2px 5px -2px rgba(16, 19, 17, 0.14);
     transition: background 0.2s ease, transform 0.2s var(--ease);
   }
-  .icon-btn svg { width: 24px; height: 24px; display: block; }
-  @media (hover: hover) { .icon-btn:hover { background: rgba(16, 19, 17, 0.06); } }
+  .icon-btn svg { width: 21px; height: 21px; display: block; }
+  @media (hover: hover) { .icon-btn:hover { background: linear-gradient(145deg, #ffffff 0%, rgba(228, 233, 230, 0.75) 100%); } }
   .icon-btn:active { transform: scale(0.9); }
   .bar button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
 
   .field {
     flex: 1 1 auto; min-width: 0; height: 100%;
     display: flex; align-items: center;
-    padding-left: 8px;
+    padding-left: 12px;
     padding-right: calc(var(--h) * 1.32);
     z-index: 2;
   }
   .field input {
     flex: 1 1 auto; min-width: 0; width: 100%; height: 44px;
     border: 0; outline: 0; background: transparent;
-    font-size: 16px; letter-spacing: 0.005em;
+    font-size: 16px; letter-spacing: -0.003em;
     color: var(--ink);
     caret-color: var(--green);
     text-overflow: ellipsis;
     -webkit-appearance: none; appearance: none;
   }
-  .field input::placeholder { color: rgba(16, 19, 17, 0.62); opacity: 1; }
+  .field input::placeholder { color: rgba(16, 19, 17, 0.64); opacity: 1; }
 
   .send {
     flex: none; position: relative;
     display: grid; place-items: center;
-    width: 36px; height: 36px; margin-left: 6px;
+    width: 34px; height: 34px; margin-left: 6px;
     border-radius: 50%;
-    background: var(--ink); color: #fff;
+    background: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
+    box-shadow: inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.22), inset 0.75px 1px 0.5px rgba(214, 255, 230, 0.6), 0 5px 10px -5px rgba(14, 122, 62, 0.75);
+    color: #fff;
     opacity: 0; transform: scale(0.6); pointer-events: none;
     transition: opacity 0.2s ease, transform 0.35s var(--ease), background 0.2s ease;
   }
   .send::before { content: ""; position: absolute; inset: -5px; }
-  .send svg { width: 18px; height: 18px; display: block; }
+  .send svg { width: 17px; height: 17px; display: block; }
   .has-text .send { opacity: 1; transform: none; pointer-events: auto; }
   .has-text .send:active { transform: scale(0.9); }
   .bar:not(.has-text) .send { width: 0; margin-left: 0; }          /* no empty slot while there is nothing to send */
@@ -673,36 +888,49 @@
   .avatar-btn {
     position: absolute; top: 0; right: 0; bottom: 0;
     width: calc(var(--h) * 1.12);
-    border-radius: 0 calc(var(--h) * 0.34) calc(var(--h) * 0.34) 0;
+    border-radius: 0 calc(var(--h) / 2) calc(var(--h) / 2) 0;
     z-index: 4;
   }
   .bar .avatar-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+  /* reached with the keyboard: the ring gets thicker and keeps to the deeper greens, so it is always easy to see */
+  .keys .bar:has(#message:focus) .bar__ring { padding: 2.5px; }
+  .keys .bar:has(#message:focus) .bar__ring i {
+    background: conic-gradient(from 0deg,
+      #0e7a3e 0deg, #0b6b35 60deg, #14964b 150deg, #0e7a3e 200deg,
+      #0b6b35 250deg, #14964b 330deg, #0e7a3e 360deg);
+  }
 
   /* ---------- sizes ---------- */
 
+  @media (max-width: 664px) {
+    /* on a phone the chips run off the edge of the screen, like a native row, and each one is real glass */
+    .chips {
+      width: auto; align-self: stretch;
+      margin: 0 calc(max(12px, env(safe-area-inset-right, 0px)) * -1) 0 calc(max(12px, env(safe-area-inset-left, 0px)) * -1);
+      padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: 12px;     /* lined up with the bar */
+      scroll-padding: 0 12px;
+    }
+    .chip:last-child { margin-right: 0; }
+  }
   @media (max-width: 560px) {
-    :root { --h: 60px; --gutter: 16px; }
-    .icon-btn { margin-left: 6px; }
-    .field { padding-left: 4px; padding-right: calc(var(--h) * 1.3); }
-    .row { grid-template-columns: 78px minmax(0, 1fr); padding: 10px 0; }
+    :root { --h: 56px; --gutter: 16px; --pad: 18px; --r-card: 26px; }
+    .field { padding-left: 10px; padding-right: calc(var(--h) * 1.3); }
     .row--stack { grid-template-columns: minmax(0, 1fr); }
-    .row--stack .row__label { margin-bottom: 2px; }
-    .mod { border-radius: 24px; }
-    .opts--days span { height: 54px; }
+    .row--stack .row__label { margin-bottom: 3px; }
+    .opts--days span { height: 52px; }
   }
   @media (max-width: 350px) {
-    :root { --gutter: 12px; }
-    .mod { padding: 15px; }
-    .mod__ghost { inset: 15px; }
-    .opt span { padding: 0 10px; font-size: 14.5px; }
+    :root { --gutter: 12px; --pad: 16px; }
+    .opt span { padding: 0 11px; font-size: 14.5px; }
+    .opts--seg span { padding: 0 14px; }
     .row { grid-template-columns: minmax(0, 1fr); }
-    .row__label { margin-bottom: 2px; }
+    .row__label { margin-bottom: 3px; }
     .copays { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-height: 460px) {
-    :root { --h: 52px; }
+    :root { --h: 48px; }
     .hello { padding-top: 34px; }
-    .dock { gap: 6px; padding-top: 10px; }
+    .dock { padding-top: 4px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -710,257 +938,9 @@
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
     .meter i, .btn, .opt span, .chip, .send { transition-duration: 0.01s; }
-  }
-
-  /* =====================================================================
-     LIQUID GLASS PASS
-     Floating controls are glass capsules: see-through, blurred behind,
-     a bright rim on the edge, a soft shade inside for thickness.
-     The chat bar's border is a green gradient that flows when it has
-     focus and while the assistant is thinking.
-     ===================================================================== */
-
-  :root {
-    --h: 60px;
-    --hair: rgba(16, 19, 17, 0.06);
-    --line: rgba(16, 19, 17, 0.06);
-    --tint: rgba(16, 19, 17, 0.045);                       /* quiet fill for controls */
-    --glass: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.5) 100%);
-    --blur: blur(24px) saturate(1.9);
-    --rim:                                                  /* light caught on the edge of the glass */
-      inset 0 1.2px 0 rgba(255, 255, 255, 0.98),
-      inset 1px 0 0 rgba(255, 255, 255, 0.6),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.45),
-      inset -1px 0 0 rgba(255, 255, 255, 0.3),
-      inset 0 0 0 1px rgba(16, 19, 17, 0.05);
-    --thick: inset 0 -9px 12px -11px rgba(16, 19, 17, 0.16); /* a little shade inside, so the glass has depth */
-    --float: 0 1px 1px rgba(16, 19, 17, 0.04), 0 14px 30px -16px rgba(16, 19, 17, 0.3);
-    --ring: linear-gradient(90deg, #d9fbe7 0%, #8ef0b0 18%, #3acb78 40%, #0e7a3e 58%, #3acb78 76%, #8ef0b0 90%, #d9fbe7 100%);
-  }
-
-  /* a whisper of color so the glass has something to catch. The page still reads as white. */
-  .app {
-    background:
-      radial-gradient(70% 34% at 92% 100%, rgba(58, 203, 120, 0.1), rgba(58, 203, 120, 0) 70%),
-      radial-gradient(60% 30% at 0% 0%, rgba(120, 200, 190, 0.05), rgba(255, 255, 255, 0) 70%),
-      var(--page);
-  }
-  .app::before {
-    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-    -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent); mask-image: linear-gradient(to bottom, #000 30%, transparent);
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.85) 20%, rgba(255, 255, 255, 0));
-  }
-
-  /* ---------- chat bar: a floating glass capsule ---------- */
-  .bar {
-    border-radius: 999px;
-    background: var(--glass);
-    -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
-    box-shadow: var(--float), 12px 14px 34px -18px rgba(40, 190, 110, 0.55);
-  }
-  /* rim + a soft highlight that slides along the top edge with the pointer */
-  .bar::after {
-    box-shadow: var(--rim), var(--thick);
-    background: radial-gradient(38% 90% at var(--lx, 28%) 0%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 70%);
-    transition: background-position 0.3s ease;
-  }
-  /* the gradient border: only the 1.5px edge of this layer is visible */
-  .bar::before {
-    content: ""; position: absolute; inset: 0;
-    border-radius: inherit;
-    padding: 1.5px;
-    background: var(--ring);
-    background-size: 220% 100%;
-    background-position: 68% 0;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-    opacity: 0.4;
-    pointer-events: none;
-    z-index: 3;
-    transition: opacity 0.35s ease, padding 0.2s ease;
-  }
-  /* the same gradient, blurred, as a soft glow in and around the edge */
-  .bar__aura {
-    position: absolute; inset: -3px;
-    border-radius: inherit;
-    padding: 7px;
-    background: var(--ring);
-    background-size: 220% 100%;
-    background-position: 68% 0;
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-    filter: blur(9px);
-    opacity: 0;
-    pointer-events: none;
-    z-index: -1;
-    transition: opacity 0.45s ease;
-  }
-  .bar:focus-within::before, .bar.is-thinking::before { opacity: 1; animation: ring-flow 5s linear infinite; }
-  .bar:focus-within .bar__aura, .bar.is-thinking .bar__aura { opacity: 0.6; animation: ring-flow 5s linear infinite; }
-  .bar.is-thinking::before, .bar.is-thinking .bar__aura { animation-duration: 1.8s; }
-  @keyframes ring-flow { from { background-position: 0% 0; } to { background-position: 183.4% 0; } }
-  /* keyboard users get a thicker ring so focus is easy to see */
-  .keys .bar:has(#message:focus)::before { padding: 2.5px; }
-
-  .icon-btn { width: 44px; height: 44px; margin-left: 8px; border-radius: 50%; }
-  .icon-btn svg { width: 22px; height: 22px; }
-  .field { padding-left: 6px; }
-  .send {
-    width: 34px; height: 34px;
-    background-color: var(--green);
-    background-image: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 14px -8px rgba(14, 122, 62, 0.8);
-  }
-  .avatar-btn { border-radius: 0 999px 999px 0; }
-  .face { right: calc(var(--h) * 0.6); }
-
-  /* ---------- chips and small floating things ---------- */
-  .dock { gap: 9px; }
-  .chips { min-height: 40px; padding: 2px 2px 2px; }
-  .chip {
-    position: relative;
-    min-height: 36px; padding: 0 14px;
-    font-size: 14px; font-weight: 500; letter-spacing: -0.005em;
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(16px) saturate(1.8); backdrop-filter: blur(16px) saturate(1.8);
-    box-shadow: var(--rim), 0 6px 14px -10px rgba(16, 19, 17, 0.3);
-  }
-  .chip::after { content: ""; position: absolute; inset: -4px 0; }           /* taller touch area than it looks */
-  @media (pointer: coarse) { .chip { min-height: 38px; } .chips { min-height: 44px; } }
-  @media (hover: hover) { .chip:hover { background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(244, 245, 242, 0.8)); } }
-  .tag {
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(14px) saturate(1.6); backdrop-filter: blur(14px) saturate(1.6);
-    box-shadow: var(--rim);
-  }
-
-  /* ---------- cards: lighter, finer, softer ---------- */
-  .mod {
-    padding: 18px;
-    border-radius: 28px;
-    background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.86) 100%);
-    box-shadow:
-      inset 0 0 0 1px rgba(16, 19, 17, 0.055),
-      inset 0 1.2px 0 #ffffff,
-      0 1px 2px rgba(16, 19, 17, 0.03),
-      0 26px 48px -30px rgba(16, 19, 17, 0.28);
-  }
-  .mod.is-past { background: rgba(255, 255, 255, 0.7); box-shadow: inset 0 0 0 1px rgba(16, 19, 17, 0.05); }
-  .mod.is-muted { box-shadow: inset 0 0 0 1px rgba(16, 19, 17, 0.05); }
-  .mod__head { margin-bottom: 10px; }
-  .mod__kind { font-size: 12.5px; font-weight: 600; letter-spacing: 0.015em; }
-  .mod__kind svg { width: 16px; height: 16px; }
-  .mod__actions { gap: 4px; margin-top: 14px; }
-  .pill { font-size: 11.5px; padding: 5px 9px; background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7); }
-  .pill--ok { background: var(--green-wash); }
-  .pill--warn { background: var(--amber-wash); }
-
-  .row { padding: 12px 0; border-top-color: var(--hair); }
-  .who { padding-bottom: 12px; }
-  .who__pic { width: 42px; height: 42px; font-size: 14px; background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8); }
-  .who__txt b { font-size: 16.5px; }
-  .who__txt span { font-size: 13.5px; }
-  .money { font-size: 19px; font-weight: 600; }
-  .keyfact b { font-size: 32px; font-weight: 600; }
-  .gauge__top b { font-weight: 600; }
-  .sum .sum__total { font-weight: 600; }
-  .fine { font-size: 12.5px; }
-  .inline-input { height: 40px; border-radius: 14px; background: var(--tint); }
-
-  /* choices are small glass capsules. The chosen one is dark tinted glass. */
-  .opt span {
-    min-height: 42px;
-    background: var(--tint);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
-    font-size: 14.5px;
-  }
-  .opt input:checked + span {
-    background-color: var(--ink);
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 16px -10px rgba(16, 19, 17, 0.7);
-  }
-  .opts--days span { height: 54px; border-radius: 18px; }
-  .opts--days b { font-size: 16.5px; }
-  .opts--list span { border-radius: 16px; }
-
-  /* the two way switch: a dark glass lens slides to the chosen side */
-  .opts--seg {
-    position: relative;
-    display: grid; grid-template-columns: 1fr 1fr;
-    padding: 3px;
-    background: var(--tint);
-    box-shadow: inset 0 1px 2px rgba(16, 19, 17, 0.06), inset 0 -1px 0 rgba(255, 255, 255, 0.7);
-  }
-  .opts--seg::before {
-    content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px;
-    width: calc(50% - 3px);
-    border-radius: 999px;
-    background-color: var(--ink);
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 14px -8px rgba(16, 19, 17, 0.7);
-    transition: transform 0.38s var(--ease);
-  }
-  .opts--seg:has(.opt:nth-child(2) input:checked)::before { transform: translateX(100%); }
-  .opts--seg .opt span {
-    position: relative;
-    min-height: 38px;
-    background: transparent; box-shadow: none;
-    transition: color 0.25s ease, background-color 0.01s linear 0s;
-  }
-  /* the chosen side takes the lens color once the lens has arrived (keeps it solid if :has is missing) */
-  .opts--seg input:checked + span { background-color: var(--ink); background-image: none; box-shadow: none; color: #fff; transition: color 0.25s ease, background-color 0.01s linear 0.36s; }
-  @media (pointer: coarse) { .opts--seg .opt span { min-height: 42px; } }
-
-  /* buttons are capsules. The main one is green tinted glass. */
-  .btn { min-height: 48px; border-radius: 999px; font-size: 15.5px; letter-spacing: -0.005em; }
-  .btn--primary {
-    background-color: var(--green);
-    background-image: linear-gradient(180deg, #128543 0%, #0b6b35 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), inset 0 -1px 0 rgba(0, 0, 0, 0.16), 0 12px 22px -14px rgba(14, 122, 62, 0.85);
-  }
-  .btn--quiet { background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(16, 19, 17, 0.03); }
-  .btn--danger {
-    background-color: var(--red-ink);
-    background-image: linear-gradient(180deg, #c7342b 0%, #a3211a 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 22px -14px rgba(179, 38, 30, 0.8);
-  }
-  .btn--text { min-height: 42px; font-size: 15px; }
-  @media (hover: hover) {
-    .btn--primary:hover { background-image: linear-gradient(180deg, #0f7a3d 0%, #0a6130 100%); background-color: #0c6c37; }
-    .btn--quiet:hover { background: rgba(16, 19, 17, 0.07); }
-  }
-  .item em { background: var(--tint); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8); font-size: 13.5px; padding: 7px 12px; }
-  .item__dot { background: var(--tint); }
-  .copays div { background: var(--tint); border-radius: 16px; }
-  .alert { border-radius: 20px; }
-  .meter { height: 7px; }
-
-  /* the member ID card gets a glass sheen */
-  .idcard { border-radius: 20px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 18px 30px -20px rgba(16, 19, 17, 0.6); }
-  .idcard::after {
-    content: ""; position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(115deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 32%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, 0.08) 100%);
-  }
-
-  /* ---------- words ---------- */
-  .ask { padding: 9px 15px; border-radius: 20px; background: var(--tint); font-size: 15.5px; }
-  .say { font-size: clamp(18.5px, 4.7vw, 21px); line-height: 1.38; margin: 16px 0 14px; }
-  .say--after { margin: 16px 0 0; }
-  .hello__title { font-size: clamp(30px, 7vw, 44px); letter-spacing: -0.025em; }
-  .turn { padding: 16px 0 24px; }
-
-  @media (max-width: 560px) {
-    :root { --h: 56px; }
-    .icon-btn { margin-left: 6px; }
-    .mod { border-radius: 26px; }
-  }
-  @media (max-height: 460px) { :root { --h: 50px; } }
-  @media (prefers-reduced-motion: reduce) {
-    .bar::before, .bar__aura { animation: none !important; }
-    .opts--seg::before { transition: none; }
-    .opts--seg input:checked + span { transition: none; }
+    /* the ring still lights up, it just does not travel or breathe, and the lens moves at once */
+    .bar .bar__ring i { animation: none !important; }
+    .bar__ring, .bar__glow, .opts--seg::before { transition-duration: 0.01s; }
   }
 </style>
 </head>
@@ -984,7 +964,8 @@
     <div class="chips" id="chips" role="group" aria-label="Things you can ask"></div>
 
     <form class="bar" id="bar" autocomplete="off" novalidate>
-      <span class="bar__aura" aria-hidden="true"></span>
+      <span class="bar__glow" aria-hidden="true"></span>
+      <span class="bar__ring" aria-hidden="true"><i></i></span>
       <div class="avatar" id="avatar" aria-hidden="true">
         <span class="avatar__halo"></span>
         <span class="avatar__body"></span>
@@ -2069,6 +2050,7 @@
     const edit = isUrgent(text) ? null : readEdit(text);   // safety always wins over an open draft
     if (edit) return editInPlace(text, edit);
     busy = true;
+    setThinking(true);                                // visual only: the gradient ring comes alive while the answer is made
     try {
     app.classList.add("has-flow");
     setDraft(null);                                   // a new request: older drafts can still be tapped, but typing no longer changes them
@@ -2104,7 +2086,7 @@
       const line = turn.querySelector(".say");
       if (line) { line.tabIndex = -1; line.focus({ preventScroll: true }); }
     }
-    } finally { busy = false; face.think(false); }
+    } finally { busy = false; face.think(false); setThinking(false); }
     return true;
   }
 
@@ -2239,9 +2221,9 @@
 
     let followTimer = 0;
     function follow(px, py) {
-      // the bright spot on the glass slides toward the pointer
+      // visual only: the highlight on the glass slides toward the pointer or finger
       const br = bar.getBoundingClientRect();
-      bar.style.setProperty("--lx", clamp(((px - br.left) / br.width) * 100, 4, 78).toFixed(1) + "%");
+      bar.style.setProperty("--mx", clamp(((px - br.left) / br.width) * 100, 6, 74).toFixed(1) + "%");
       if (reduceMotion.matches || mode === "thinking") return;
       mode = "follow";
       lookAtPoint(px, py);
@@ -2289,11 +2271,7 @@
       resize() { readSize(); render(); },
       blink,
       lookAtEl,
-      think(on) {
-        bar.classList.toggle("is-thinking", !!on);          // the gradient border flows faster while it thinks
-        if (reduceMotion.matches) return;
-        if (on) setMode("thinking"); else { setMode("idle"); wander(); }
-      },
+      think(on) { if (reduceMotion.matches) return; if (on) setMode("thinking"); else { setMode("idle"); wander(); } },
       sent(el) {
         if (reduceMotion.matches) return;
         eyes.hopV -= 1.5; eyes.openTarget = 0.5; eyes.glowTarget = 1.15; wake();
@@ -2373,6 +2351,29 @@
   window.addEventListener("resize", onResize);
   window.addEventListener("orientationchange", onResize);
 
+  /* ---- glass (visual only, no behavior) ---- */
+  // the gradient ring's color wheel is squashed to the bar's own proportions, so the greens travel evenly
+  function syncGlass() { bar.style.setProperty("--ring-k", (bar.offsetHeight / Math.max(1, bar.offsetWidth)).toFixed(4)); }
+  window.addEventListener("resize", syncGlass);
+  // the ring keeps flowing while it fades out, and flows faster while the assistant thinks
+  const ringWheel = $(".bar__ring i");
+  let ringRest = 0;
+  function ringWake() { clearTimeout(ringRest); bar.classList.add("is-lit"); }
+  function ringSleep() {
+    clearTimeout(ringRest);
+    ringRest = setTimeout(() => { if (!bar.matches(":focus-within") && !bar.classList.contains("is-thinking")) bar.classList.remove("is-lit"); }, 800);
+  }
+  function ringPace(rate) {
+    const flow = ringWheel && ringWheel.getAnimations ? ringWheel.getAnimations()[0] : null;
+    if (flow && flow.updatePlaybackRate) flow.updatePlaybackRate(rate);
+  }
+  function setThinking(on) {
+    bar.classList.toggle("is-thinking", on);
+    if (on) { ringWake(); ringPace(3.2); } else { ringPace(1); ringSleep(); }
+  }
+  bar.addEventListener("focusin", ringWake);
+  bar.addEventListener("focusout", ringSleep);
+
   /* ---- start ---- */
   // the app manifest only works from a web address, so skip it when this is opened as a plain file
   if (location.protocol.indexOf("http") === 0) {
@@ -2392,6 +2393,7 @@
 
   setChips(HOME_CHIPS);
   onResize();
+  syncGlass();
   face.start();
 
   // small hook so this can be wired to a real model later

@@ -15,7 +15,7 @@
     Hairline ............. rgba(16,19,17,0.08)
     Green (actions) ...... #0e7a3e   Green text #0b6b35   Green wash #e8f6ed
     Amber / red .......... #8a5a00 on #fdf3dc / #b3261e on #fdecea
-    Chat bar ............. #121213 with a green avatar (#8ef0b0 / #3acb78 / #14964b)
+    Chat bar ............. white glass (blurred, 66 to 88% white) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
 
   TYPOGRAPHY
     Assistant voice ...... system serif (New York / Georgia), 20 to 22px
@@ -53,7 +53,6 @@
     --green-hi: #8ef0b0;
     --green-mid: #3acb78;
     --green-lo: #14964b;
-    --bar: #121213;
     --h: 68px;
     --gutter: 20px;
     --kb: 0px;
@@ -129,10 +128,11 @@
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    scroll-padding-bottom: calc(var(--dock-h, 150px) + 16px);
     padding:
       calc(12px + env(safe-area-inset-top, 0px))
       max(var(--gutter), env(safe-area-inset-right, 0px))
-      0
+      calc(var(--dock-h, 150px) + 8px)
       max(var(--gutter), env(safe-area-inset-left, 0px));
     outline: none;
   }
@@ -209,8 +209,12 @@
       inset 0 0 0 1px var(--line),
       0 1px 2px rgba(16, 19, 17, 0.04),
       0 18px 40px -18px rgba(16, 19, 17, 0.18);
+    transform-origin: 85% 100%;                /* cards grow out of the avatar's corner */
     animation: mod-in 0.55s var(--ease) both;
+    transition: box-shadow 0.5s ease, background 0.5s ease;
   }
+  /* "fog": only the newest answer is at full strength */
+  .mod.is-past { background: #fbfbfa; box-shadow: inset 0 0 0 1px var(--line); }
   @keyframes mod-in {
     from { opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(6px); }
     to   { opacity: 1; transform: none; filter: blur(0); }
@@ -272,6 +276,11 @@
   .row__val { min-width: 0; font-size: 15.5px; }
   .row__val b { font-weight: 600; }
   .note { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+  .row.flash { animation: flash 1.1s ease; border-radius: 10px; }
+  @keyframes flash {
+    0%, 35% { background: var(--green-wash); box-shadow: 0 0 0 6px var(--green-wash); }
+    100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
+  }
   .money { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
   .ok { color: var(--green-ink); font-style: normal; font-weight: 600; }
   .fine { font-size: 12.5px; line-height: 1.45; color: var(--ink-3); margin-top: 12px; }
@@ -344,7 +353,8 @@
   }
 
   /* booked / done state */
-  .done { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; }
+  .done { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; outline: none; }
+  .mod__kind { outline: none; }
   .done__check {
     flex: none; width: 46px; height: 46px; border-radius: 50%;
     display: grid; place-items: center;
@@ -429,6 +439,18 @@
   .copays div { padding: 9px 2px; border-radius: 14px; background: var(--wash); font-size: 11.5px; color: var(--ink-2); }
   .copays b { display: block; font-size: 16px; font-weight: 650; color: var(--ink); }
 
+  /* today (home) */
+  .item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
+  .item:first-child { border-top: 0; padding-top: 2px; }
+  .item__dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--wash); color: var(--ink-2); }
+  .item__dot svg { width: 18px; height: 18px; }
+  .item.is-done .item__dot { background: var(--green-wash); color: var(--green-ink); }
+  .item__txt { flex: 1 1 auto; min-width: 0; display: grid; }
+  .item__txt b { font-size: 15.5px; font-weight: 600; }
+  .item__txt span { font-size: 13.5px; color: var(--ink-2); }
+  .item em { flex: none; font-style: normal; font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 999px; background: var(--wash); transition: background 0.18s ease; }
+  @media (hover: hover) { button.item:hover em { background: var(--wash-2); } }
+
   /* urgent */
   .alert { padding: 14px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 12px; }
   .alert span { display: block; font-weight: 400; font-size: 14px; margin-top: 2px; }
@@ -440,21 +462,27 @@
   /* ---------- dock: suggestions + chat bar ---------- */
 
   .dock {
-    position: relative;
-    flex: none;
+    position: absolute; left: 0; right: 0; bottom: 0;
     display: flex; flex-direction: column; align-items: center; gap: 10px;
     padding:
-      0
+      18px
       max(12px, env(safe-area-inset-right, 0px))
       max(14px, env(safe-area-inset-bottom, 0px))
       max(12px, env(safe-area-inset-left, 0px));
-    background: var(--page);
     z-index: 4;
+    pointer-events: none;                      /* taps fall through the empty parts */
   }
+  .dock > * { pointer-events: auto; }
+  /* frosted veil: whatever scrolls under the dock goes soft and pale */
   .dock::before {
-    content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 34px;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--page));
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0, rgba(255, 255, 255, 0.62) 46px, rgba(255, 255, 255, 0.8) 100%);
+    -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
     pointer-events: none;
+    z-index: -1;
   }
   .kb-open .dock { padding-bottom: 10px; }
 
@@ -473,8 +501,10 @@
     flex: none;
     min-height: 40px; padding: 0 15px;
     border-radius: 999px;
-    box-shadow: inset 0 0 0 1px var(--line);
-    background: #fff;
+    box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 12px -6px rgba(16, 19, 17, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+            backdrop-filter: blur(16px) saturate(1.6);
     font-size: 14.5px; font-weight: 500; color: var(--ink);
     white-space: nowrap;
     animation: rise 0.4s var(--ease) both;
@@ -483,7 +513,7 @@
   }
   .chip:last-child { margin-right: 24px; }
   .chip:active { transform: scale(0.95); }
-  @media (hover: hover) { .chip:hover { background: var(--wash); } }
+  @media (hover: hover) { .chip:hover { background: rgba(244, 245, 242, 0.92); } }
   @media (pointer: coarse) { .chip { min-height: 44px; } .chips { min-height: 46px; } }
   @media (pointer: coarse) { .opts--seg span { min-height: 42px; } }
 
@@ -495,16 +525,25 @@
     width: min(100%, 640px);
     height: var(--h);
     border-radius: calc(var(--h) * 0.34);
-    background: linear-gradient(180deg, #1f1f20 0%, #151516 9%, var(--bar) 20%, var(--bar) 82%, #161617 94%, #1a1a1b 100%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.66) 100%);
+    -webkit-backdrop-filter: blur(26px) saturate(1.8);
+            backdrop-filter: blur(26px) saturate(1.8);
     box-shadow:
-      0 22px 44px -18px rgba(16, 19, 17, 0.45),
-      0 4px 12px rgba(16, 19, 17, 0.14);
-    color: #f2f2f4;
+      0 20px 44px -20px rgba(16, 19, 17, 0.3),
+      0 3px 10px rgba(16, 19, 17, 0.07),
+      14px 14px 34px -16px rgba(40, 190, 110, 0.5);       /* a little green light under the avatar */
+    color: var(--ink);
+    transition: box-shadow 0.25s ease;
   }
+  /* glass edge: hairline outside, bright rim inside */
   .bar::after {
     content: ""; position: absolute; inset: 0;
     border-radius: inherit;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.13), inset 0 0 14px rgba(255, 255, 255, 0.035);
+    box-shadow:
+      inset 0 0 0 1px rgba(16, 19, 17, 0.08),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 0 18px rgba(255, 255, 255, 0.55);
     pointer-events: none;
     z-index: 3;
   }
@@ -515,20 +554,20 @@
     width: 48px; height: 48px;
     margin-left: calc(var(--h) * 0.14);
     border-radius: 14px;
-    color: #fff;
+    color: var(--ink);
     z-index: 2;
     transition: background 0.2s ease, transform 0.2s var(--ease);
   }
   .icon-btn svg { width: 24px; height: 24px; display: block; }
-  @media (hover: hover) { .icon-btn:hover { background: rgba(255, 255, 255, 0.07); } }
+  @media (hover: hover) { .icon-btn:hover { background: rgba(16, 19, 17, 0.06); } }
   .icon-btn:active { transform: scale(0.9); }
-  .bar button:focus-visible { outline: 2px solid var(--green-hi); outline-offset: -2px; }
-  .bar { transition: box-shadow 0.25s ease; }
+  .bar button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
   .bar:focus-within {
     box-shadow:
-      0 22px 44px -18px rgba(16, 19, 17, 0.45),
-      0 4px 12px rgba(16, 19, 17, 0.14),
-      0 0 0 4px rgba(58, 203, 120, 0.22);
+      0 20px 44px -20px rgba(16, 19, 17, 0.3),
+      0 3px 10px rgba(16, 19, 17, 0.07),
+      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
+      0 0 0 4px rgba(58, 203, 120, 0.2);
   }
 
   .field {
@@ -542,19 +581,19 @@
     flex: 1 1 auto; min-width: 0; width: 100%; height: 44px;
     border: 0; outline: 0; background: transparent;
     font-size: 16px; letter-spacing: 0.005em;
-    color: #f2f2f4;
-    caret-color: var(--green-hi);
+    color: var(--ink);
+    caret-color: var(--green);
     text-overflow: ellipsis;
     -webkit-appearance: none; appearance: none;
   }
-  .field input::placeholder { color: rgba(255, 255, 255, 0.42); opacity: 1; }
+  .field input::placeholder { color: rgba(16, 19, 17, 0.44); opacity: 1; }
 
   .send {
     flex: none; position: relative;
     display: grid; place-items: center;
     width: 36px; height: 36px; margin-left: 6px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.14); color: #fff;
+    background: var(--ink); color: #fff;
     opacity: 0; transform: scale(0.6); pointer-events: none;
     transition: opacity 0.2s ease, transform 0.35s var(--ease), background 0.2s ease;
   }
@@ -568,7 +607,7 @@
     position: absolute; top: -22%; bottom: -22%;
     right: calc(var(--h) * -0.3); width: calc(var(--h) * 1.78);
     border-radius: 50%;
-    background: radial-gradient(closest-side, rgba(18, 138, 80, 0.5), rgba(23, 87, 60, 0.28) 70%, rgba(19, 39, 30, 0) 100%);
+    background: radial-gradient(closest-side, rgba(58, 203, 120, 0.42), rgba(90, 220, 150, 0.16) 70%, rgba(120, 230, 170, 0) 100%);
     opacity: var(--glow, 0.85);
   }
   .avatar__body {
@@ -578,7 +617,7 @@
     border-radius: 50%;
     background:
       radial-gradient(34% 30% at 34% 30%, rgba(142, 240, 176, 0.95) 0%, rgba(118, 226, 158, 0.5) 52%, rgba(118, 226, 158, 0) 100%),
-      linear-gradient(90deg, rgba(16, 132, 76, 0.85) 0%, rgba(16, 132, 76, 0) 24%),
+      linear-gradient(90deg, rgba(70, 208, 132, 0.7) 0%, rgba(70, 208, 132, 0) 24%),
       linear-gradient(180deg, #44d081 0%, #3acb78 38%, #25ad60 64%, #14964b 100%);
     filter: blur(calc(var(--h) * 0.1));
     transform: scale(var(--pulse, 1));
@@ -640,7 +679,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ask, .say .w, .mod, .mod.is-built .part, .chip, .done__check path { animation: none; }
+    .ask, .say .w, .mod, .mod.is-built .part, .chip, .done__check path, .row.flash { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
     .meter i, .btn, .opt span, .chip, .send { transition-duration: 0.01s; }
@@ -831,7 +870,7 @@
       const say = dayAsked
         ? `I found a ${kind} with ${doc.name} on ${dayAsked}${about}. Check the details, change anything, then confirm.`
         : `Here is the soonest ${kind} with ${doc.name}${about}. Check the details, change anything, then confirm.`;
-      return { say, ui: [{ type: "schedule", props: { doc, reason, video, day, slot } }], next: ["Show my ID card", `Find another ${spec.one.replace(/^an? /, "")}`, "My deductible"] };
+      return { say, ui: [{ type: "schedule", props: { doc, reason, video, day, slot } }], next: [video ? "In person instead" : "Video instead", "A day later", "Morning works better", `Find another ${spec.one.replace(/^an? /, "")}`] };
     }
 
     if (/find|look for|search|near me|in.?network|who can i see|need (a|an) /.test(t)) {
@@ -921,6 +960,15 @@
     setTimeout(done, 600);
   }
 
+  // after a card changes state its old buttons are gone, so put focus on the result
+  function landFocus(card) {
+    if (document.activeElement && document.activeElement !== document.body && document.activeElement.isConnected) return;
+    const head = card.querySelector(".done") || card.querySelector(".mod__kind");
+    if (!head) return;
+    head.setAttribute("tabindex", "-1");
+    head.focus({ preventScroll: true });
+  }
+
   /* ---- dates ---- */
   function upcomingWeekdays(n) {
     const out = [], d = new Date();
@@ -942,19 +990,20 @@
     m.body.innerHTML =
       `<div class="who part"><span class="who__pic" aria-hidden="true">${esc(initials(doc.name))}</span>
          <span class="who__txt"><b>${esc(doc.name)}</b><span>${esc(spec.label)} · <em class="ok">In network</em></span></span></div>
-       <div class="row part"><label class="row__label" for="${n}-reason">Reason</label>
+       <div class="row part" data-row="reason"><label class="row__label" for="${n}-reason">Reason</label>
          <input class="inline-input" id="${n}-reason" type="text" maxlength="60" autocomplete="off" enterkeyhint="done" /></div>
-       <div class="row row--stack part"><span class="row__label" id="${n}-dl">Day</span>
+       <div class="row row--stack part" data-row="day"><span class="row__label" id="${n}-dl">Day</span>
          <div class="opts opts--days" role="radiogroup" aria-labelledby="${n}-dl">${days.map((d, i) =>
            `<label class="opt"><input type="radio" name="${n}-day" value="${i}" aria-label="${esc(fmt(d, { weekday: "long", month: "long", day: "numeric" }))}"${i === st.day ? " checked" : ""} /><span><small>${fmt(d, { weekday: "short" })}</small><b>${d.getDate()}</b></span></label>`).join("")}</div></div>
-       <div class="row row--stack part"><span class="row__label" id="${n}-tl">Time</span>
+       <div class="row row--stack part" data-row="time"><span class="row__label" id="${n}-tl">Time</span>
          <div class="opts" role="radiogroup" aria-labelledby="${n}-tl" data-times></div></div>
-       <div class="row part"><span class="row__label" id="${n}-vl">Visit</span>
+       <div class="row part" data-row="type"><span class="row__label" id="${n}-vl">Visit</span>
          <div class="opts opts--seg" role="radiogroup" aria-labelledby="${n}-vl">
            <label class="opt"><input type="radio" name="${n}-type" value="office"${st.video ? "" : " checked"} /><span>In person</span></label>
            <label class="opt"><input type="radio" name="${n}-type" value="video"${st.video ? " checked" : ""} /><span>Video</span></label></div></div>
-       <div class="row part"><span class="row__label">Where</span><div class="row__val" data-where></div></div>
-       <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b class="money" data-cost></b><span class="note" data-costnote></span></div></div>`;
+       <div class="row part" data-row="where"><span class="row__label">Where</span><div class="row__val" data-where></div></div>
+       <div class="row part" data-row="cost"><span class="row__label">You pay</span><div class="row__val"><b class="money" data-cost></b><span class="note" data-costnote></span></div></div>
+       <p class="fine part">I picked the day and time for you. Tap anything to change it, or just tell me. Nothing is booked until you confirm.</p>`;
     m.actions.innerHTML =
       `<button class="btn btn--primary part" type="button" data-confirm></button>
        <button class="btn btn--text part" type="button" data-skip>Not now</button>`;
@@ -988,9 +1037,35 @@
     });
     reasonEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); reasonEl.blur(); } });
 
+    // lets the chat bar change this same card ("make it Thursday", "video instead")
+    const check = (name, value) => { const r = m.el.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
+    const draft = {
+      kind: "visit", open: true, el: m.el,
+      state: () => ({ day: st.day, slot: st.slot, video: st.video, days }),
+      describe: () => `${fmt(days[st.day], { weekday: "long" })} at ${SLOTS[st.day][st.slot]}${st.video ? ", by video" : ""}`,
+      set(patch) {
+        const changed = [];
+        if (patch.day != null && clamp(patch.day, 0, 4) !== st.day) { st.day = clamp(patch.day, 0, 4); check(`${n}-day`, st.day); drawTimes(); changed.push("day", "time"); }
+        if (patch.slot != null && clamp(patch.slot, 0, 2) !== st.slot) { st.slot = clamp(patch.slot, 0, 2); drawTimes(); changed.push("time"); }
+        if (patch.video != null && patch.video !== st.video) { st.video = patch.video; check(`${n}-type`, st.video ? "video" : "office"); changed.push("type", "where", "cost"); }
+        if (patch.reason && patch.reason !== reasonEl.value) { reasonEl.value = patch.reason; changed.push("reason"); }
+        draw();
+        [...new Set(changed)].forEach((name) => {
+          const row = m.el.querySelector(`[data-row="${name}"]`);
+          if (row) { row.classList.remove("flash"); row.offsetWidth; row.classList.add("flash"); }
+        });
+        return changed;
+      },
+      confirm: () => confirmBtn.click(),
+      skip: () => $("[data-skip]", m.el).click(),
+    };
+    api.draft(draft);
+
     confirmBtn.addEventListener("click", () => {
+      draft.open = false; api.draft(null);
       const reason = reasonEl.value.trim() || spec.reason;
       const whenText = when(), place = st.video ? "Video visit" : `${doc.place}, ${doc.addr}`, price = money(cost());
+      const code = "V-" + String(48213 + seq * 37).slice(-5);
       morph(m.el, () => {
         m.pill().textContent = "Booked"; m.pill().className = "pill pill--ok";
         m.body.innerHTML =
@@ -998,26 +1073,40 @@
            <div class="row part"><span class="row__label">With</span><div class="row__val"><b>${esc(doc.name)}</b><span class="note">${esc(spec.label)}</span></div></div>
            <div class="row part"><span class="row__label">Where</span><div class="row__val">${esc(place)}</div></div>
            <div class="row part"><span class="row__label">Reason</span><div class="row__val">${esc(reason)}</div></div>
-           <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b>${price}</b> at the visit</div></div>`;
+           <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b>${price}</b> at the visit</div></div>
+           <p class="fine part">Confirmation ${code}. Bring your member ID card and arrive 10 minutes early.</p>`;
         m.actions.innerHTML =
           `<button class="btn btn--quiet part" type="button" data-ics>Add to calendar</button>
            <button class="btn btn--text part" type="button" data-cancel>Cancel this visit</button>`;
       });
+      landFocus(m.el);
       $("[data-ics]", m.el).addEventListener("click", () => saveCalendarFile(days[st.day], SLOTS[st.day][st.slot], `Visit with ${doc.name}`, place, reason));
-      $("[data-cancel]", m.el).addEventListener("click", () => {
+      $("[data-cancel]", m.el).addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        if (!btn.dataset.armed) {                 // first tap asks, second tap cancels
+          btn.dataset.armed = "1";
+          btn.textContent = "Yes, cancel this visit";
+          btn.className = "btn btn--quiet part";
+          btn.style.color = "var(--red-ink)";
+          statusEl.textContent = "Press again to cancel this visit.";
+          return;
+        }
         morph(m.el, () => {
           m.el.classList.add("is-muted");
           m.pill().textContent = "Cancelled"; m.pill().className = "pill";
           m.actions.innerHTML = "";
           const d = $(".done b", m.el); if (d) d.textContent = "Visit cancelled";
         });
+        landFocus(m.el);
         api.say("Okay, I cancelled that visit. You will not be charged.", ["Schedule a visit", "Find another doctor"]);
       });
       api.celebrate(m.el);
+      todayDone(/checkup/i.test(reason) ? "checkup" : "", "Visit booked", `${doc.name} · ${whenText}`);
       api.say(`Done. You are booked for ${whenText}. I will remind you the day before.`, ["Show my ID card", "My deductible"]);
     });
 
     $("[data-skip]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
       morph(m.el, () => {
         m.el.classList.add("is-muted");
         m.pill().textContent = "Not booked";
@@ -1093,6 +1182,7 @@
       if (btn.dataset.armed) {
         morph(m.el, () => { m.actions.innerHTML = `<div class="done part" style="padding:6px 0 0"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>Paid $25.00</b><span>Card ending 4417 · receipt sent by email</span></div></div>`; });
         api.celebrate(m.el);
+        todayDone("claim", "Claim paid in full", "Office visit on Oct 28");
         api.say("Thanks. That claim is all done.", ["My deductible", "Show my ID card"]);
       } else {
         btn.dataset.armed = "1";
@@ -1113,7 +1203,7 @@
          <div>
            <div class="idcard__name">${esc(MEMBER.name)}</div>
            <div class="idcard__grid" style="margin-top:10px">
-             <div><span>Member ID</span><b>${esc(MEMBER.id)}</b></div>
+             <div><span>Member ID</span><b data-id>${esc(MEMBER.id.replace(/\d(?=.*\d{2}$)/g, "•"))}</b></div>
              <div><span>Group</span><b>${esc(MEMBER.group)}</b></div>
            </div>
          </div>
@@ -1121,8 +1211,15 @@
        <div class="copays part">
          <div><b>$25</b>Primary</div><div><b>$50</b>Specialist</div><div><b>$75</b>Urgent care</div><div><b>$250</b>ER</div>
        </div>`;
-    m.actions.innerHTML = `<button class="btn btn--quiet part" type="button">Copy member ID</button>`;
-    const btn = $("button", m.actions);
+    m.actions.innerHTML = `<button class="btn btn--quiet part" type="button" data-show aria-pressed="false">Show full number</button><button class="btn btn--text part" type="button" data-copy>Copy member ID</button>`;
+    const showBtn = $("[data-show]", m.actions), idEl = $("[data-id]", m.el);
+    showBtn.addEventListener("click", () => {
+      const on = showBtn.getAttribute("aria-pressed") !== "true";
+      showBtn.setAttribute("aria-pressed", String(on));
+      showBtn.textContent = on ? "Hide number" : "Show full number";
+      idEl.textContent = on ? MEMBER.id : MEMBER.id.replace(/\d(?=.*\d{2}$)/g, "•");
+    });
+    const btn = $("[data-copy]", m.actions);
     btn.addEventListener("click", async () => {
       let ok = false;
       try { await navigator.clipboard.writeText(MEMBER.id); ok = true; } catch (err) { ok = false; }
@@ -1180,7 +1277,10 @@
       if (e.target.name === `${n}-how`) st.how = e.target.value;
       draw();
     });
+    const draft = { kind: "refill", open: true, el: m.el, confirm: () => confirmBtn.click(), skip: () => $("[data-skip]", m.el).click() };
+    api.draft(draft);
     confirmBtn.addEventListener("click", () => {
+      draft.open = false; api.draft(null);
       const line = st.how === "pickup" ? "Ready after 2:00 PM today at Main Street Pharmacy" : "Arrives by mail in 3 to 5 days";
       morph(m.el, () => {
         m.pill().textContent = "Ordered"; m.pill().className = "pill pill--ok";
@@ -1191,6 +1291,7 @@
         m.actions.innerHTML = "";
       });
       api.celebrate(m.el);
+      todayDone("refill", "Refill ordered", line);
       api.say("Done. I will let you know when it is ready.", ["Show my ID card", "My deductible"]);
     });
     $("[data-skip]", m.el).addEventListener("click", () => {
@@ -1248,14 +1349,35 @@
     return m.el;
   };
 
-  /* ---- a gentle nudge on the home screen ---- */
-  MODULES.nudge = (p, api) => {
-    const m = shell("Due soon", ICON.spark, '<span class="pill pill--ok">$0</span>');
-    m.body.innerHTML = `<div class="who part" style="padding-bottom:2px"><span class="who__pic" aria-hidden="true">${ICON.cal.replace("<svg", '<svg width="22" height="22"')}</span><span class="who__txt"><b>Your yearly checkup</b><span>It is free with your plan. Your last one was 13 months ago.</span></span></div>`;
-    m.actions.innerHTML = `<button class="btn btn--quiet part" type="button">Schedule it</button>`;
-    $("button", m.actions).addEventListener("click", () => api.ask("Schedule my yearly checkup"));
+  /* ---- Today: a short list of things that matter right now (home screen) ---- */
+  const TODAY = [
+    { key: "checkup", icon: "cal",  title: "Yearly checkup is due", sub: "$0 with your plan", verb: "Schedule", ask: "Schedule my yearly checkup" },
+    { key: "claim",   icon: "doc",  title: "A claim was paid",           sub: "Office visit on Oct 28. You owe $25.", verb: "See it", ask: "Where is my claim?" },
+    { key: "refill",  icon: "pill", title: "A refill is ready",          sub: "Atorvastatin 20 mg", verb: "Refill", ask: "Refill my prescription" },
+  ];
+  let todayBody = null;
+  MODULES.today = (p, api) => {
+    const m = shell("Today", ICON.spark);
+    todayBody = m.body;
+    TODAY.forEach((it) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "item part"; b.dataset.key = it.key;
+      b.innerHTML = `<span class="item__dot" aria-hidden="true">${ICON[it.icon]}</span><span class="item__txt"><b>${esc(it.title)}</b><span>${esc(it.sub)}</span></span><em>${esc(it.verb)}</em>`;
+      b.addEventListener("click", () => api.ask(it.ask));
+      m.body.appendChild(b);
+    });
     return m.el;
   };
+  // the Today card fills in as things get done
+  function todayDone(key, title, sub) {
+    if (!todayBody) return;
+    const old = key && todayBody.querySelector(`[data-key="${key}"]`);
+    if (old) old.remove();
+    const d = document.createElement("div");
+    d.className = "item is-done";
+    d.innerHTML = `<span class="item__dot" aria-hidden="true">${ICON.check}</span><span class="item__txt"><b>${esc(title)}</b><span>${esc(sub)}</span></span>`;
+    todayBody.prepend(d);
+  }
 
   /* ---- add to calendar (makes a real .ics file) ---- */
   function saveCalendarFile(day, time, title, place, reason) {
@@ -1334,8 +1456,12 @@
     drawChips(guesses.length ? guesses : contextChips);
   }
 
+  const dock = $(".dock");
+  let dockH = 150;
   function sizeLastTurn() {
-    flow.style.setProperty("--turn-min", Math.max(0, page.clientHeight - 56) + "px");
+    dockH = dock.offsetHeight;
+    app.style.setProperty("--dock-h", dockH + "px");
+    flow.style.setProperty("--turn-min", Math.max(0, page.clientHeight - dockH - 64) + "px");
   }
   function showTurn(turn) {
     sizeLastTurn();
@@ -1344,7 +1470,7 @@
   // scroll just enough to show el, but never push `anchor` off the top
   function keepInView(el, anchor = el) {
     const r = el.getBoundingClientRect(), a = anchor.getBoundingClientRect(), p = page.getBoundingClientRect();
-    const need = r.bottom - p.bottom + 24, room = a.top - p.top - 44;
+    const need = r.bottom - (p.bottom - dockH) + 24, room = a.top - p.top - 44;
     if (need > 0 && room > 0) page.scrollBy({ top: Math.min(need, room), behavior: reduceMotion.matches ? "auto" : "smooth" });
   }
 
@@ -1371,20 +1497,88 @@
     const cards = el.classList.contains("mod") ? [el] : [...el.querySelectorAll(".mod")];
     cards.forEach((c) => { stagger(c); if (!reduceMotion.matches) c.classList.add("is-composing"); });
     turn.appendChild(el);
-    await wait(pace(620));
+    await wait(pace(420));
     cards.forEach((c) => { c.classList.remove("is-composing"); c.classList.add("is-built"); });
     el.querySelectorAll("[data-fill]").forEach((i) => requestAnimationFrame(() => (i.style.width = i.dataset.fill + "%")));
     return el;
   }
 
+  // the newest unconfirmed card. The chat bar can change it or confirm it.
+  let activeDraft = null;
+  const liveDrafts = {};
+  function setDraft(d) {
+    if (d) {
+      const old = liveDrafts[d.kind];
+      if (old && old !== d && old.open && old.el.isConnected) {
+        old.open = false;
+        old.el.classList.add("is-muted");
+        const pill = old.el.querySelector(".pill"); if (pill) pill.textContent = "Replaced";
+        old.el.querySelectorAll("input").forEach((i) => (i.disabled = true));
+        const acts = old.el.querySelector(".mod__actions"); if (acts) acts.innerHTML = "";
+      }
+      liveDrafts[d.kind] = d;
+    }
+    activeDraft = d;
+    input.placeholder = d ? "Tell me what to change" : "Ask anything";
+  }
+  const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  function readEdit(text) {
+    const d = activeDraft;
+    if (!d || !d.open || !d.el.isConnected) return null;
+    const t = text.toLowerCase().trim();
+    if (/^(yes|yep|yeah|ok|okay|confirm|book it|looks good|do it|go ahead|that works|sounds good|perfect)\b/.test(t)) return { act: "confirm" };
+    if (/^(no\b|nope|cancel|never ?mind|not now|stop|forget it)/.test(t)) return { act: "skip" };
+    if (d.kind !== "visit" || /schedul|book|find|cover|claim|id card|deductible|refill|talk to|show my|how much|what is/.test(t)) return null;
+    const s = d.state(), patch = {};
+    if (/video|virtual|online|telehealth/.test(t)) patch.video = true;
+    else if (/in.?person|office|face to face/.test(t)) patch.video = false;
+    DAY_NAMES.forEach((name, i) => { if (t.includes(name)) { const k = s.days.findIndex((x) => x.getDay() === i); if (k >= 0) patch.day = k; } });
+    let rest = t;
+    if (/\b(next day|day later|day after|push it)\b/.test(t)) { patch.day = s.day + 1; rest = rest.replace(/day later/, ""); }
+    else if (/\bday (before|earlier)\b|sooner|soonest/.test(t)) patch.day = s.day - 1;
+    else if (/tomorrow/.test(t)) patch.day = 0;
+    else if (/next week/.test(t)) { const k = s.days.findIndex((x, i) => i > 0 && x.getDay() === 1); if (k >= 0) patch.day = k; }
+    if (/morning|earl/.test(rest)) patch.slot = 0;
+    else if (/afternoon|evening|after work|end of day/.test(rest)) patch.slot = 2;
+    else if (/\bnoon\b|midday|lunch/.test(rest)) patch.slot = 1;
+    else if (/later/.test(rest)) patch.slot = s.slot + 1;
+    const why = REASONS.find(([re]) => re.test(t));
+    if (why) patch.reason = why[1];
+    return Object.keys(patch).length ? { act: "set", patch } : null;
+  }
+
+  // a short exchange about the card that is already on screen (no new card)
+  async function editInPlace(text, edit) {
+    const d = activeDraft, turn = d.el.closest(".turn") || flow.lastElementChild;
+    busy = true;
+    const q = document.createElement("div");
+    q.className = "ask"; q.style.marginTop = "18px"; q.textContent = text;
+    turn.appendChild(q);
+    face.sent(q);
+    if (edit.act === "set") {
+      const changed = d.set(edit.patch);
+      const line = changed.length ? `Done. It is now ${d.describe()}. Confirm when you are ready.` : "It is already set that way. Confirm when you are ready.";
+      const row = d.el.querySelector(".row.flash") || d.el;
+      row.scrollIntoView({ block: "center", behavior: reduceMotion.matches ? "auto" : "smooth" });
+      await wait(pace(350));
+      await speak(turn, line, "say--after");
+      statusEl.textContent = line;
+      face.lookAtEl(row);
+    } else if (edit.act === "confirm") d.confirm();
+    else d.skip();
+    busy = false;
+    return true;
+  }
+
   // what a card is allowed to do
   function api(turn) {
     return {
+      draft: (d) => setDraft(d),
       ask: (text) => ask(text),
       say: (text, next) => {
-        const card = turn.querySelector(".mod:last-of-type") || turn;
         speak(turn, text, "say--after");
-        requestAnimationFrame(() => keepInView(turn.lastElementChild, card));
+        const line = turn.lastElementChild;
+        requestAnimationFrame(() => keepInView(line, line));
         if (next) setChips(next);
         statusEl.textContent = text;
       },
@@ -1396,8 +1590,12 @@
   async function ask(raw) {
     const text = String(raw || "").trim();
     if (!text || busy) return false;
+    const edit = readEdit(text);
+    if (edit) return editInPlace(text, edit);
     busy = true;
     app.classList.add("has-flow");
+    setDraft(null);                                   // a new request: older drafts can still be tapped, but typing no longer changes them
+    flow.querySelectorAll(".mod").forEach((m) => m.classList.add("is-past"));
 
     const turn = document.createElement("article");
     turn.className = "turn";
@@ -1414,10 +1612,10 @@
     catch (err) { spec = { say: "Something went wrong on my side. Please try again.", ui: [], next: HOME_CHIPS }; }
     if (!/talk to|person|wrong/.test(text.toLowerCase())) lastAsk = text;
 
-    await wait(pace(420));
+    await wait(pace(260));
     face.think(true);
-    await wait(pace(rand(450, 800)));
-    await speak(turn, spec.say);
+    await wait(pace(rand(320, 520)));
+    await Promise.race([speak(turn, spec.say), wait(pace(380))]);     // the card starts while the sentence is still arriving
     let last = null;
     for (const ui of spec.ui || []) last = (await mount(turn, ui)) || last;
     face.think(false);
@@ -1431,6 +1629,7 @@
   function goHome() {
     if (busy) return;
     flow.innerHTML = "";
+    setDraft(null);
     app.classList.remove("has-flow");
     page.scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" });
     setChips(HOME_CHIPS);
@@ -1665,6 +1864,7 @@
   }
   if (vv) { vv.addEventListener("resize", syncViewport); vv.addEventListener("scroll", syncViewport); }
   function onResize() { face.resize(); syncBar(); syncViewport(); }
+  if (window.ResizeObserver) new ResizeObserver(sizeLastTurn).observe(dock);
   window.addEventListener("resize", onResize);
   window.addEventListener("orientationchange", onResize);
 
@@ -1674,10 +1874,10 @@
   const hour = now.getHours();
   $("#greetingLine").textContent = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${MEMBER.first}.`;
 
-  const nudge = MODULES.nudge({}, api(null));
-  stagger(nudge);
-  nudge.classList.add("is-built");
-  $("#nudge").appendChild(nudge);
+  const today = MODULES.today({}, api(null));
+  stagger(today);
+  today.classList.add("is-built");
+  $("#nudge").appendChild(today);
 
   setChips(HOME_CHIPS);
   onResize();

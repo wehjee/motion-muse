@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<!--
+  Member assistant (prototype)
+  A health plan assistant where the answer is the interface.
+  The member types what they need. The assistant replies with a short
+  sentence and a generated card they can check, change and confirm.
+  One file, no build step, no network requests. All data is made up.
+
+  UI TYPE: mobile-first web app (chat bar + generated cards)
+
+  COLORS
+    Page ................. #ffffff
+    Ink .................. #101311 / #5b625d / #8a908b
+    Wash (soft surface) .. #f4f5f2 / #eceee9
+    Hairline ............. rgba(16,19,17,0.08)
+    Green (actions) ...... #0e7a3e   Green text #0b6b35   Green wash #e8f6ed
+    Amber / red .......... #8a5a00 on #fdf3dc / #b3261e on #fdecea
+    Chat bar ............. white glass (blurred, 66 to 88% white) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
+
+  TYPOGRAPHY
+    Assistant voice ...... system serif (New York / Georgia), 20 to 22px
+    Interface ............ system sans, 16px base, 13px labels
+    Greeting ............. system serif, 32 to 46px
+
+  SHAPES
+    Card radius 26px, control radius 16px, chips full pill
+    Bar height 68px desktop / 60px phone, radius 0.34 of height
+    Column max width 640px, cards max width 440px
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+<meta name="color-scheme" content="light" />
+<meta name="theme-color" content="#ffffff" />
+<!-- lets a phone open this full screen from the home screen, like an app -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Assistant" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<title>Member assistant</title>
+<style>
+  :root {
+    --page: #ffffff;
+    --ink: #101311;
+    --ink-2: #5b625d;
+    --ink-3: #6b716c;
+    --wash: #f4f5f2;
+    --wash-2: #eceee9;
+    --line: rgba(16, 19, 17, 0.08);
+    --green: #0e7a3e;
+    --green-ink: #0b6b35;
+    --green-wash: #e8f6ed;
+    --amber-ink: #8a5a00;
+    --amber-wash: #fdf3dc;
+    --red-ink: #b3261e;
+    --red-wash: #fdecea;
+    --green-hi: #8ef0b0;
+    --green-mid: #3acb78;
+    --green-lo: #14964b;
+    --h: 68px;
+    --gutter: 20px;
+    --kb: 0px;
+    --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+
+  button, input { font: inherit; color: inherit; }
+  button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; cursor: pointer; border: 0; background: none; }
+  :focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
+
+  /* ---------- shell ---------- */
+
+  .app {
+    position: fixed;
+    inset: 0 0 var(--kb) 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--page);
+  }
+
+  .tag {
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: max(14px, env(safe-area-inset-right, 0px));
+    z-index: 5;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--ink-3);
+    background: rgba(255, 255, 255, 0.86);
+    padding: 5px 10px;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px var(--line);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .has-flow .tag { opacity: 0; }
+  .app::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0;
+    height: calc(22px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(to bottom, var(--page) 30%, rgba(255, 255, 255, 0));
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .page {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-padding-bottom: calc(var(--dock-h, 150px) + 16px);
+    padding:
+      calc(12px + env(safe-area-inset-top, 0px))
+      max(var(--gutter), env(safe-area-inset-right, 0px))
+      calc(var(--dock-h, 150px) + 8px)
+      max(var(--gutter), env(safe-area-inset-left, 0px));
+    outline: none;
+  }
+  .page::-webkit-scrollbar { display: none; }
+
+  .column { width: min(100%, 640px); margin: 0 auto; }
+
+  /* ---------- home ---------- */
+
+  .hello { padding: clamp(40px, 11vh, 120px) 0 6px; }
+  .hello__date {
+    font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
+    color: var(--ink-3); margin-bottom: 14px;
+  }
+  .hello__title {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(32px, 7.4vw, 46px);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  .hello__title span { display: block; }
+  .hello__sub { color: #8a908b; }
+  .hello__nudge { margin-top: clamp(22px, 4.5vh, 40px); }
+
+  /* ---------- conversation ---------- */
+
+  .flow:empty { display: none; }
+  .turn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 18px 0 26px;
+    scroll-margin-top: 44px;
+  }
+  .turn:last-child { min-height: var(--turn-min, 0px); }
+
+  .ask {
+    align-self: flex-end;
+    max-width: 84%;
+    padding: 10px 15px;
+    border-radius: 20px 20px 6px 20px;
+    background: var(--wash);
+    font-size: 16px;
+    overflow-wrap: anywhere;
+    animation: rise 0.45s var(--ease) both;
+  }
+
+  .say {
+    font-family: var(--serif);
+    font-size: clamp(19px, 4.9vw, 22px);
+    line-height: 1.36;
+    letter-spacing: -0.01em;
+    margin: 18px 0 16px;
+    max-width: 30em;
+    text-wrap: pretty;
+  }
+  .say .w { display: inline-block; animation: word 0.5s var(--ease) both; animation-delay: calc(var(--i) * 34ms); }
+  .say--after { margin: 18px 0 0; }
+  .say { outline: none; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes word { from { opacity: 0; transform: translateY(5px); filter: blur(5px); } to { opacity: 1; transform: none; filter: blur(0); } }
+
+  /* ---------- cards ("modules") ---------- */
+
+  .mod {
+    position: relative;
+    width: min(100%, 440px);
+    padding: 18px;
+    border-radius: 26px;
+    background: #fff;
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      0 1px 2px rgba(16, 19, 17, 0.04),
+      0 18px 40px -18px rgba(16, 19, 17, 0.18);
+    transform-origin: 85% 100%;                /* cards grow out of the avatar's corner */
+    animation: mod-in 0.55s var(--ease) both;
+    transition: box-shadow 0.5s ease, background 0.5s ease;
+  }
+  /* "fog": only the newest answer is at full strength */
+  .mod.is-past { background: #fbfbfa; box-shadow: inset 0 0 0 1px var(--line); }
+  @keyframes mod-in {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(6px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+
+  .mod__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; min-height: 24px; }
+  .mod__kind { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; color: var(--ink-2); }
+  .mod__kind svg { width: 17px; height: 17px; flex: none; }
+  .mod__actions { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+  .mod__actions:empty { display: none; }
+
+  .pill {
+    font-size: 12px; font-weight: 600; line-height: 1;
+    padding: 6px 10px; border-radius: 999px;
+    background: var(--wash); color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .pill--ok { background: var(--green-wash); color: var(--green-ink); }
+  .pill--warn { background: var(--amber-wash); color: var(--amber-ink); }
+
+  /* a card is first "composed": soft bars shimmer, then the real parts arrive one by one */
+  .mod__ghost {
+    position: absolute; inset: 18px;
+    display: grid; align-content: start; gap: 12px;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .mod__ghost i {
+    height: 14px; border-radius: 8px;
+    background: linear-gradient(100deg, var(--wash) 30%, #fafbf9 50%, var(--wash) 70%);
+    background-size: 220% 100%;
+    animation: shimmer 1.1s linear infinite;
+  }
+  .mod__ghost i:nth-child(1) { width: 34%; }
+  .mod__ghost i:nth-child(2) { width: 78%; height: 40px; border-radius: 14px; margin-top: 6px; }
+  .mod__ghost i:nth-child(3) { width: 92%; }
+  .mod__ghost i:nth-child(4) { width: 64%; }
+  .mod__ghost i:nth-child(5) { width: 100%; height: 46px; border-radius: 16px; margin-top: 8px; }
+  @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -100% 0; } }
+
+  .mod.is-composing > :not(.mod__ghost) { visibility: hidden; }
+  .mod:not(.is-composing) .mod__ghost { opacity: 0; }
+  .mod.is-built .part { animation: part-in 0.5s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
+  @keyframes part-in { from { opacity: 0; transform: translateY(8px); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
+
+  .mod.is-muted { box-shadow: inset 0 0 0 1px var(--line); }
+  .mod.is-muted .opts, .mod.is-muted .inline-input { opacity: 0.55; }     /* only the switched off controls fade, the words stay readable */
+  .mod.is-muted .done__check { background: var(--wash); color: var(--ink-2); }
+
+  /* rows inside a card */
+  .row {
+    display: grid;
+    grid-template-columns: 70px minmax(0, 1fr);
+    gap: 4px 12px;
+    align-items: center;
+    padding: 11px 0;
+    border-top: 1px solid var(--line);
+  }
+  .row__label { font-size: 13px; color: var(--ink-3); }
+  .row__val { min-width: 0; font-size: 15.5px; overflow-wrap: anywhere; }
+  .row__val b { font-weight: 600; }
+  .note { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+  /* a row that was just changed by typing glows green for a moment */
+  .mod.is-built .row.flash { animation: part-in 0.5s var(--ease) both, flash 1.1s ease; }
+  @keyframes flash {
+    0%, 35% { background: var(--green-wash); box-shadow: 0 0 0 6px var(--green-wash); border-radius: 10px; }
+    100% { background: transparent; box-shadow: 0 0 0 6px transparent; border-radius: 10px; }
+  }
+  .money { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+  .ok { color: var(--green-ink); font-style: normal; font-weight: 600; }
+  .fine { font-size: 12.5px; line-height: 1.45; color: var(--ink-3); margin-top: 12px; }
+
+  .who { display: flex; align-items: center; gap: 12px; padding: 2px 0 14px; }
+  .who__pic {
+    flex: none; width: 46px; height: 46px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--wash); color: var(--ink-2);
+    font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
+  }
+  .who__txt { min-width: 0; display: grid; }
+  .who__txt b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .who__txt span { font-size: 14px; color: var(--ink-2); }
+
+  .inline-input {
+    width: 100%; height: 40px;
+    padding: 0 12px;
+    border: 0; border-radius: 12px;
+    background: var(--wash);
+    font-size: 16px;
+    outline: none;
+    transition: box-shadow 0.2s ease, background 0.2s ease;
+  }
+  .inline-input:focus { background: #fff; box-shadow: inset 0 0 0 2px var(--green); }
+
+  /* choice chips (real radio inputs underneath) */
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+  .opt { position: relative; display: block; }
+  .opt input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .opt span {
+    display: grid; place-items: center;
+    min-height: 44px; padding: 0 14px;
+    border-radius: 999px;
+    background: var(--wash);
+    font-size: 15px; font-weight: 500;
+    white-space: nowrap;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s var(--ease);
+  }
+  .opt input:checked + span { background: var(--ink); color: #fff; }
+  .opt input:focus-visible + span { outline: 2px solid var(--green); outline-offset: 2px; }
+  .opt:active span { transform: scale(0.95); }
+  .opts--days { flex-wrap: nowrap; }
+  .opts--days .opt { flex: 1 1 0; min-width: 44px; max-width: 64px; }
+  .opts--days span { height: 58px; padding: 0; border-radius: 16px; line-height: 1.1; align-content: center; gap: 2px; }
+  .opts--days small { font-size: 11.5px; font-weight: 500; opacity: 0.7; }
+  .opts--days b { font-size: 17px; font-weight: 600; }
+  .opts--seg { flex-wrap: nowrap; padding: 3px; border-radius: 999px; background: var(--wash); gap: 0; width: fit-content; max-width: 100%; }
+  .opts--seg span { background: transparent; min-height: 38px; }
+  .opts--seg input:checked + span { background: var(--ink); color: #fff; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 50px; padding: 0 18px;
+    border-radius: 16px;
+    font-size: 16px; font-weight: 600;
+    text-align: center;
+    transition: transform 0.18s var(--ease), background 0.18s ease, opacity 0.18s ease;
+  }
+  a.btn { text-decoration: none; }
+  .btn:active { transform: scale(0.97); }
+  .btn--primary { background: var(--green); color: #fff; }
+  .btn--quiet { background: var(--wash); color: var(--ink); }
+  .btn--text { min-height: 44px; color: var(--ink-2); font-weight: 500; }
+  .btn--danger { background: var(--red-ink); color: #fff; }
+  @media (hover: hover) {
+    .btn--primary:hover { background: #0c6c37; }
+    .btn--quiet:hover { background: var(--wash-2); }
+    .btn--text:hover { color: var(--ink); }
+  }
+
+  /* booked / done state */
+  .done { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; outline: none; }
+  .mod__kind { outline: none; }
+  .done__check {
+    flex: none; width: 46px; height: 46px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--green-wash); color: var(--green-ink);
+  }
+  .done__check svg { width: 24px; height: 24px; }
+  .done__check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw 0.5s 0.15s var(--ease) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .done b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .done span { font-size: 14.5px; color: var(--ink-2); }
+
+  /* row of cards you can swipe (find care) */
+  .strip {
+    align-self: stretch;
+    display: flex; gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    margin: 0 calc(var(--gutter) * -1);
+    padding: 4px var(--gutter) 30px;
+    scroll-padding-left: var(--gutter);
+  }
+  .strip::-webkit-scrollbar { display: none; }
+  .strip .mod { flex: none; width: min(76vw, 264px); scroll-snap-align: start; padding: 16px; }
+  .strip .mod__head { justify-content: flex-start; }
+  .strip + .say--after { margin-top: -6px; }
+  @media (min-width: 700px) {
+    .strip { overflow: visible; }
+    .strip .mod { flex: 1 1 0; width: auto; min-width: 0; }
+  }
+  .mini { display: grid; gap: 3px; font-size: 14px; color: var(--ink-2); padding: 0 0 4px; }
+  .mini b { color: var(--ink); font-weight: 600; }
+
+  /* coverage */
+  .verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 2px 0 14px; }
+  .verdict b { font-family: var(--serif); font-size: 28px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.1; }
+  .meter { height: 8px; border-radius: 999px; background: var(--wash-2); overflow: hidden; margin-top: 8px; }
+  .meter i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--green-mid), var(--green-lo)); transition: width 1.1s var(--ease) 0.25s; }
+
+  /* usage */
+  .gauge { padding: 12px 0; border-top: 1px solid var(--line); }
+  .gauge__top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .gauge__top span { font-size: 13px; color: var(--ink-3); }
+  .gauge__top b { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+  .gauge__top em { font-style: normal; font-size: 14px; font-weight: 400; color: var(--ink-2); }
+
+  /* claim */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 0 14px; }
+  .step { position: relative; padding-top: 20px; font-size: 13px; color: var(--ink-3); }
+  .step b { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .step::before {
+    content: ""; position: absolute; top: 2px; left: 0;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--green-lo); box-shadow: 0 0 0 4px var(--green-wash);
+    z-index: 1;
+  }
+  .step::after { content: ""; position: absolute; top: 6px; left: 0; right: 0; height: 2px; background: var(--green-wash); }
+  .step:last-child::after { display: none; }
+  .step.is-now::before { background: #fff; box-shadow: inset 0 0 0 3px var(--green-lo), 0 0 0 4px var(--green-wash); }
+  .step.is-now::after, .step.is-next::after { background: var(--wash-2); }
+  .step.is-next::before { background: #fff; box-shadow: inset 0 0 0 2px #cfd3cc; }
+  .step.is-next b { color: var(--ink-2); }
+
+  /* cost estimate */
+  .keyfact { padding: 0 0 12px; }
+  .keyfact b { display: block; font-size: 34px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .keyfact span { font-size: 14.5px; color: var(--ink-2); }
+  .opts--list { flex-direction: column; flex-wrap: nowrap; }
+  .opts--list span { display: flex; justify-content: space-between; gap: 12px; border-radius: 14px; padding: 0 14px; min-height: 48px; white-space: normal; text-align: left; }
+  .opts--list span b { font-weight: 500; }
+  .opts--list span em { font-style: normal; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .math { border-top: 1px solid var(--line); }
+  .math summary { list-style: none; cursor: pointer; padding: 12px 0; font-size: 14.5px; font-weight: 600; color: var(--green-ink); display: flex; justify-content: space-between; align-items: center; }
+  .math summary::-webkit-details-marker { display: none; }
+  .math summary::after { content: "+"; font-size: 20px; font-weight: 400; line-height: 1; }
+  .math[open] summary::after { content: "\2212"; }
+  .math .sum { border-top: 0; padding-top: 0; padding-bottom: 6px; font-size: 14.5px; }
+  .math .sum div span:first-child { max-width: 70%; }
+  .sum { display: grid; gap: 7px; padding: 12px 0 2px; border-top: 1px solid var(--line); font-size: 15px; }
+  .sum div { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
+  .sum .sum__total { color: var(--ink); font-weight: 650; font-size: 17px; padding-top: 8px; border-top: 1px solid var(--line); }
+
+  /* member ID card */
+  .idcard {
+    position: relative;
+    aspect-ratio: 1.586;
+    border-radius: 18px;
+    padding: 16px 18px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    color: #fff;
+    background:
+      radial-gradient(90% 120% at 108% -10%, rgba(142, 240, 176, 0.95) 0%, rgba(58, 203, 120, 0.85) 22%, rgba(20, 150, 75, 0.55) 44%, rgba(18, 39, 30, 0) 72%),
+      #121413;
+    overflow: hidden;
+  }
+  .idcard__plan { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
+  .idcard__name { font-family: var(--serif); font-size: clamp(21px, 6vw, 25px); letter-spacing: -0.01em; }
+  .idcard__grid { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 13px; }
+  .idcard__grid span { opacity: 0.62; display: block; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .idcard__grid b { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+  .copays { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; text-align: center; }
+  .copays div { padding: 9px 2px; border-radius: 14px; background: var(--wash); font-size: 11.5px; color: var(--ink-2); }
+  .copays b { display: block; font-size: 16px; font-weight: 650; color: var(--ink); }
+
+  /* today (home) */
+  .item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
+  .item:first-child { border-top: 0; padding-top: 2px; }
+  .item__dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--wash); color: var(--ink-2); }
+  .item__dot svg { width: 18px; height: 18px; }
+  .item.is-done .item__dot { background: var(--green-wash); color: var(--green-ink); }
+  .item__txt { flex: 1 1 auto; min-width: 0; display: grid; }
+  .item__txt b { font-size: 15.5px; font-weight: 600; }
+  .item__txt span { font-size: 13.5px; color: var(--ink-2); }
+  .item em { flex: none; font-style: normal; font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 999px; background: var(--wash); transition: background 0.18s ease; }
+  @media (hover: hover) { button.item:hover em { background: var(--wash-2); } }
+
+  /* urgent */
+  .alert { display: block; text-decoration: none; padding: 14px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+  a.choice { text-decoration: none; color: inherit; }
+  .alert span { display: block; font-weight: 400; font-size: 14px; margin-top: 2px; }
+  .choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
+  .choice b { display: block; font-weight: 600; font-size: 15.5px; }
+  .choice span { font-size: 13.5px; color: var(--ink-2); }
+  .choice em { font-style: normal; font-weight: 600; font-size: 15px; white-space: nowrap; }
+
+  /* ---------- dock: suggestions + chat bar ---------- */
+
+  .dock {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding:
+      18px
+      max(12px, env(safe-area-inset-right, 0px))
+      max(14px, env(safe-area-inset-bottom, 0px))
+      max(12px, env(safe-area-inset-left, 0px));
+    z-index: 4;
+    pointer-events: none;                      /* taps fall through the empty parts */
+  }
+  .dock > * { pointer-events: auto; }
+  /* frosted veil: whatever scrolls under the dock goes soft and pale */
+  .dock::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0, rgba(255, 255, 255, 0.62) 46px, rgba(255, 255, 255, 0.8) 100%);
+    -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
+    pointer-events: none;
+    z-index: -1;
+  }
+  .kb-open .dock { padding-bottom: 10px; }
+
+  .chips {
+    display: flex; gap: 8px;
+    width: min(100%, 640px);
+    min-height: 42px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px 2px 0;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: none;
+    min-height: 40px; padding: 0 15px;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 12px -6px rgba(16, 19, 17, 0.12);
+    background: rgba(255, 255, 255, 0.72);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+            backdrop-filter: blur(16px) saturate(1.6);
+    font-size: 14.5px; font-weight: 500; color: var(--ink);
+    white-space: nowrap;
+    animation: rise 0.4s var(--ease) both;
+    animation-delay: calc(var(--i, 0) * 40ms);
+    transition: background 0.18s ease, transform 0.18s var(--ease);
+  }
+  .chip:last-child { margin-right: 24px; }
+  .chip:focus-visible { outline-offset: -2px; }
+  .chip:active { transform: scale(0.95); }
+  @media (hover: hover) { .chip:hover { background: rgba(244, 245, 242, 0.92); } }
+  @media (pointer: coarse) { .chip { min-height: 44px; } .chips { min-height: 46px; } }
+  @media (pointer: coarse) { .opts--seg span { min-height: 42px; } }
+
+  .bar {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    width: min(100%, 640px);
+    height: var(--h);
+    border-radius: calc(var(--h) * 0.34);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.66) 100%);
+    -webkit-backdrop-filter: blur(26px) saturate(1.8);
+            backdrop-filter: blur(26px) saturate(1.8);
+    box-shadow:
+      0 20px 44px -20px rgba(16, 19, 17, 0.3),
+      0 3px 10px rgba(16, 19, 17, 0.07),
+      14px 14px 34px -16px rgba(40, 190, 110, 0.5);       /* a little green light under the avatar */
+    color: var(--ink);
+    transition: box-shadow 0.25s ease;
+  }
+  /* glass edge: hairline outside, bright rim inside */
+  .bar::after {
+    content: ""; position: absolute; inset: 0;
+    border-radius: inherit;
+    box-shadow:
+      inset 0 0 0 1px rgba(16, 19, 17, 0.08),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 0 18px rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .icon-btn {
+    flex: none;
+    display: grid; place-items: center;
+    width: 48px; height: 48px;
+    margin-left: calc(var(--h) * 0.14);
+    border-radius: 14px;
+    color: var(--ink);
+    z-index: 2;
+    transition: background 0.2s ease, transform 0.2s var(--ease);
+  }
+  .icon-btn svg { width: 24px; height: 24px; display: block; }
+  @media (hover: hover) { .icon-btn:hover { background: rgba(16, 19, 17, 0.06); } }
+  .icon-btn:active { transform: scale(0.9); }
+  .bar button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+  .bar:focus-within {
+    box-shadow:
+      0 20px 44px -20px rgba(16, 19, 17, 0.3),
+      0 3px 10px rgba(16, 19, 17, 0.07),
+      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
+      0 0 0 4px rgba(58, 203, 120, 0.2);
+  }
+
+  .field {
+    flex: 1 1 auto; min-width: 0; height: 100%;
+    display: flex; align-items: center;
+    padding-left: 8px;
+    padding-right: calc(var(--h) * 1.32);
+    z-index: 2;
+  }
+  .field input {
+    flex: 1 1 auto; min-width: 0; width: 100%; height: 44px;
+    border: 0; outline: 0; background: transparent;
+    font-size: 16px; letter-spacing: 0.005em;
+    color: var(--ink);
+    caret-color: var(--green);
+    text-overflow: ellipsis;
+    -webkit-appearance: none; appearance: none;
+  }
+  .field input::placeholder { color: rgba(16, 19, 17, 0.62); opacity: 1; }
+
+  .send {
+    flex: none; position: relative;
+    display: grid; place-items: center;
+    width: 36px; height: 36px; margin-left: 6px;
+    border-radius: 50%;
+    background: var(--ink); color: #fff;
+    opacity: 0; transform: scale(0.6); pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.35s var(--ease), background 0.2s ease;
+  }
+  .send::before { content: ""; position: absolute; inset: -5px; }
+  .send svg { width: 18px; height: 18px; display: block; }
+  .has-text .send { opacity: 1; transform: none; pointer-events: auto; }
+  .has-text .send:active { transform: scale(0.9); }
+  .bar:not(.has-text) .send { width: 0; margin-left: 0; }          /* no empty slot while there is nothing to send */
+
+  .avatar { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
+  .avatar__halo {
+    position: absolute; top: -22%; bottom: -22%;
+    right: calc(var(--h) * -0.3); width: calc(var(--h) * 1.78);
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(58, 203, 120, 0.42), rgba(90, 220, 150, 0.16) 70%, rgba(120, 230, 170, 0) 100%);
+    opacity: var(--glow, 0.85);
+  }
+  .avatar__body {
+    position: absolute;
+    top: calc(var(--h) * -0.41); bottom: calc(var(--h) * -0.39);
+    right: calc(var(--h) * -0.67); width: calc(var(--h) * 1.8);
+    border-radius: 50%;
+    background:
+      radial-gradient(34% 30% at 34% 30%, rgba(142, 240, 176, 0.95) 0%, rgba(118, 226, 158, 0.5) 52%, rgba(118, 226, 158, 0) 100%),
+      linear-gradient(90deg, rgba(70, 208, 132, 0.7) 0%, rgba(70, 208, 132, 0) 24%),
+      linear-gradient(180deg, #44d081 0%, #3acb78 38%, #25ad60 64%, #14964b 100%);
+    filter: blur(calc(var(--h) * 0.1));
+    transform: scale(var(--pulse, 1));
+    transform-origin: 70% 50%;
+  }
+  .avatar__sheen {
+    position: absolute; top: 0; right: 0;
+    width: calc(var(--h) * 1); height: 40%;
+    background: radial-gradient(60% 100% at 46% 0%, rgba(176, 255, 208, 0.3), rgba(176, 255, 208, 0) 100%);
+    filter: blur(calc(var(--h) * 0.06));
+  }
+  .face { position: absolute; top: 50%; right: calc(var(--h) * 0.55); width: 0; height: 0; }
+  .eye {
+    position: absolute; left: 0; top: 0;
+    width: calc(var(--h) * 0.32); height: calc(var(--h) * 0.45);
+    margin: calc(var(--h) * -0.225) 0 0 calc(var(--h) * -0.16);
+    border-radius: 50%;
+    background:
+      radial-gradient(62% 52% at 38% 26%, #ffffff 0%, rgba(255, 255, 255, 0) 100%),
+      linear-gradient(172deg, #f6fef9 0%, #ecfbf1 50%, #d5f3e0 100%);
+    will-change: transform;
+  }
+  .eye--l { box-shadow: inset calc(var(--h) * 0.016) calc(var(--h) * -0.012) calc(var(--h) * 0.014) rgba(150, 255, 200, 0.9), 0 0 calc(var(--h) * 0.05) rgba(190, 255, 220, 0.3), 0 calc(var(--h) * 0.02) calc(var(--h) * 0.07) rgba(8, 92, 46, 0.35); }
+  .eye--r { box-shadow: inset calc(var(--h) * -0.016) calc(var(--h) * -0.014) calc(var(--h) * 0.014) rgba(150, 255, 200, 0.9), 0 0 calc(var(--h) * 0.05) rgba(190, 255, 220, 0.3), 0 calc(var(--h) * 0.02) calc(var(--h) * 0.07) rgba(8, 92, 46, 0.35); }
+
+  .avatar-btn {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: calc(var(--h) * 1.12);
+    border-radius: 0 calc(var(--h) * 0.34) calc(var(--h) * 0.34) 0;
+    z-index: 4;
+  }
+  .bar .avatar-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+  /* a clear ring on the bar when the text box is reached with the keyboard */
+  .keys .bar:has(#message:focus) {
+    box-shadow:
+      0 20px 44px -20px rgba(16, 19, 17, 0.3),
+      0 3px 10px rgba(16, 19, 17, 0.07),
+      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
+      0 0 0 2px var(--green);
+  }
+
+  /* ---------- sizes ---------- */
+
+  @media (max-width: 560px) {
+    :root { --h: 60px; --gutter: 16px; }
+    .icon-btn { margin-left: 6px; }
+    .field { padding-left: 4px; padding-right: calc(var(--h) * 1.3); }
+    .row { grid-template-columns: 78px minmax(0, 1fr); padding: 10px 0; }
+    .row--stack { grid-template-columns: minmax(0, 1fr); }
+    .row--stack .row__label { margin-bottom: 2px; }
+    .mod { border-radius: 24px; }
+    .opts--days span { height: 54px; }
+  }
+  @media (max-width: 350px) {
+    :root { --gutter: 12px; }
+    .mod { padding: 15px; }
+    .mod__ghost { inset: 15px; }
+    .opt span { padding: 0 10px; font-size: 14.5px; }
+    .row { grid-template-columns: minmax(0, 1fr); }
+    .row__label { margin-bottom: 2px; }
+    .copays { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-height: 460px) {
+    :root { --h: 52px; }
+    .hello { padding-top: 34px; }
+    .dock { gap: 6px; padding-top: 10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path { animation: none; }
+    .done__check path { stroke-dashoffset: 0; }
+    .mod__ghost i { animation: none; }
+    .meter i, .btn, .opt span, .chip, .send { transition-duration: 0.01s; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <div class="tag">Prototype · sample data</div>
+
+  <main class="page" id="page" tabindex="-1">
+    <div class="column">
+      <section class="hello" id="hello" aria-labelledby="greeting">
+        <p class="hello__date" id="today"></p>
+        <h1 class="hello__title" id="greeting"><span id="greetingLine">Hello, Jamie.</span><span class="hello__sub">What do you need today?</span></h1>
+        <div class="hello__nudge" id="nudge"></div>
+      </section>
+      <div class="flow" id="flow"></div>
+    </div>
+  </main>
+
+  <div class="dock">
+    <div class="chips" id="chips" role="group" aria-label="Things you can ask"></div>
+
+    <form class="bar" id="bar" autocomplete="off" novalidate>
+      <div class="avatar" id="avatar" aria-hidden="true">
+        <span class="avatar__halo"></span>
+        <span class="avatar__body"></span>
+        <span class="avatar__sheen"></span>
+        <span class="face">
+          <span class="eye eye--l" id="eyeL"></span>
+          <span class="eye eye--r" id="eyeR"></span>
+        </span>
+      </div>
+
+      <button class="icon-btn" id="home" type="button" aria-label="Home. Start over">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M10.5 3.4a2.2 2.2 0 0 1 3 0l5.6 5.1c.6.5.9 1.2.9 2V18a2.5 2.5 0 0 1-2.5 2.5h-1.4a1.3 1.3 0 0 1-1.3-1.3v-4a1.7 1.7 0 0 0-1.7-1.7h-2.2a1.7 1.7 0 0 0-1.7 1.7v4a1.3 1.3 0 0 1-1.3 1.3H6.5A2.5 2.5 0 0 1 4 18v-7.5c0-.8.3-1.5.9-2z"/>
+        </svg>
+      </button>
+
+      <div class="field">
+        <label class="sr-only" for="message">Ask about your health plan</label>
+        <input id="message" name="message" type="text" inputmode="text" enterkeyhint="send"
+               placeholder="Ask anything" autocomplete="off" autocapitalize="sentences" spellcheck="true" maxlength="300" />
+        <button class="send" id="send" type="submit" aria-label="Send" tabindex="-1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5.5"/><path d="M6 11.2 12 5.2l6 6"/>
+          </svg>
+        </button>
+      </div>
+
+      <button class="avatar-btn" id="avatarBtn" type="button" aria-label="Start typing"></button>
+    </form>
+  </div>
+
+  <p class="sr-only" id="status" role="status" aria-live="polite"></p>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (sel, scope = document) => scope.querySelector(sel);
+  const root = document.documentElement;
+  const app = $("#app"), page = $("#page"), flow = $("#flow"), chipsEl = $("#chips"), statusEl = $("#status");
+  const bar = $("#bar"), input = $("#message"), sendBtn = $("#send"), avatarBtn = $("#avatarBtn"), homeBtn = $("#home");
+  const avatarEl = $("#avatar"), eyeL = $("#eyeL"), eyeR = $("#eyeR");
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const pace = (ms) => (reduceMotion.matches ? Math.min(ms, 120) : ms);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const money = (n) => "$" + n.toLocaleString("en-US");
+
+  /* =========================================================
+     1. SAMPLE DATA  (all made up)
+     ========================================================= */
+
+  const MEMBER = { first: "Jamie", name: "Jamie Rivera", id: "MBR 4821 0937 01", group: "0845 21", plan: "Standard PPO" };
+  const USAGE = { deductible: [850, 1500], oop: [1320, 4000] };
+
+  const SPECIALTIES = [
+    { key: "derm",    label: "Dermatology",      noun: "dermatologists",       one: "a dermatologist",       re: /dermatolog|skin|rash|acne|mole/, reason: "Skin check",     pay: [50, 25] },
+    { key: "pt",      label: "Physical therapy", noun: "physical therapists",  one: "a physical therapist",  re: /physical therap|physio|\bpt\b/,   reason: "First visit",    pay: [40, 40] },
+    { key: "ortho",   label: "Orthopedics",      noun: "bone and joint doctors", one: "a bone and joint doctor", re: /ortho|knee|shoulder|joint|sprain|bone|ankle/, reason: "Joint pain", pay: [50, 25] },
+    { key: "therapy", label: "Mental health",    noun: "therapists",           one: "a therapist",           re: /therap|counsel|mental|anxi|depress|psych|stress/, reason: "First session", pay: [25, 10] },
+    { key: "eye",     label: "Eye care",         noun: "eye doctors",          one: "an eye doctor",         re: /\beye|vision|optom|glasses|contacts/, reason: "Eye exam",   pay: [50, 50] },
+    { key: "primary", label: "Primary care",     noun: "primary care doctors", one: "a primary care doctor", re: /primary|pcp|family doctor|check-?up|physical|my doctor|flu|cold|sick|cough/, reason: "General visit", pay: [25, 10] },
+  ];
+  const SPEC = Object.fromEntries(SPECIALTIES.map((s) => [s.key, s]));
+
+  const DOCS = {
+    primary: [["Dr. Maya Chen", "Riverside Family Clinic", "210 Alder St", "1.2 mi"], ["Dr. Samuel Okafor", "Northgate Medical", "88 Pine Ave", "2.4 mi"], ["Dr. Elena Park", "Lakeview Primary Care", "5 Shore Rd", "3.1 mi"]],
+    derm:    [["Dr. Luis Ortega", "Clearwater Dermatology", "14 Birch Ln", "1.8 mi"], ["Dr. Hannah Brooks", "Cedar Skin Clinic", "301 Elm St", "2.9 mi"], ["Dr. Arjun Mehta", "Uptown Dermatology", "77 Market St", "4.0 mi"]],
+    pt:      [["Nora Whitfield, PT", "Stride Physical Therapy", "42 Mill Rd", "0.9 mi"], ["Daniel Reyes, PT", "Motion Lab", "160 Grove St", "2.2 mi"], ["Priya Nair, PT", "Summit Rehab", "9 Hilltop Dr", "3.6 mi"]],
+    ortho:   [["Dr. Grace Lin", "Harbor Orthopedics", "120 Dock St", "2.0 mi"], ["Dr. Marcus Hale", "Peak Bone and Joint", "33 Ridge Rd", "3.3 mi"], ["Dr. Sofia Alvarez", "Central Ortho Group", "400 Main St", "4.4 mi"]],
+    therapy: [["Dana Kim, LCSW", "Open Door Counseling", "18 Willow Way", "1.5 mi"], ["Dr. Omar Haddad", "Still Water Therapy", "250 Oak St", "2.7 mi"], ["Rachel Stone, LMFT", "Bright Path Counseling", "6 Garden Ct", "3.8 mi"]],
+    eye:     [["Dr. Irene Novak", "Clear View Eye Care", "55 Lake St", "1.1 mi"], ["Dr. Theo Grant", "Focus Optometry", "210 Park Ave", "2.5 mi"], ["Dr. Amara Diallo", "Bayside Eye Clinic", "12 Pier Rd", "3.9 mi"]],
+  };
+  const docsFor = (key) => DOCS[key].map(([name, place, addr, dist], i) => ({ name, place, addr, dist, spec: key, i }));
+  const initials = (name) => name.replace(/^Dr\.\s+/, "").replace(/,.*$/, "").split(/\s+/).map((p) => p[0]).slice(0, 2).join("");
+
+  const REASONS = [
+    [/knee/, "Knee pain"], [/shoulder/, "Shoulder pain"], [/ankle/, "Ankle pain"], [/\bback (pain|hurts|ache)|\bmy back\b|backache/, "Back pain"],
+    [/rash/, "Skin rash"], [/acne/, "Acne"], [/mole/, "Mole check"],
+    [/check-?up|annual|yearly|physical(?! therap)/, "Yearly checkup"],
+    [/vaccine|flu shot/, "Vaccine"], [/cold|flu|cough|sore throat|fever/, "Cold or flu"],
+    [/anxi|stress/, "Stress and anxiety"], [/glasses|vision|eye exam/, "Eye exam"], [/headache|migraine/, "Headaches"],
+  ];
+
+  const BENEFITS = [
+    { re: /physical therap|physio|\bpt\b/, name: "Physical therapy", covered: true, pay: "$40 per visit", note: "This is your copay. You do not need to meet your deductible first.", limit: ["Visits used this year", 4, 30], approval: "Not needed for your first 12 visits", spec: "pt" },
+    { re: /\bmri\b|\bct\b|scan|imaging|x-?ray/, name: "MRI and CT scans", covered: true, pay: "20% after your deductible", note: "You still have $650 left on your deductible, and you pay that first. Ask me what an MRI will cost you.", approval: "Needed first. Your doctor sends the request.", warn: true, next: "What will an MRI cost?" },
+    { re: /acupunct/, name: "Acupuncture", covered: false, pay: "Full price", note: "Your plan does not pay for this. You can use HSA or FSA money for it." },
+    { re: /massage/, name: "Massage therapy", covered: false, pay: "Full price", note: "Your plan does not pay for this unless it is part of physical therapy." },
+    { re: /mental|counsel|psych|therapist|(^|is |for |my |does )therapy/, name: "Mental health visits", covered: true, pay: "$25 per visit", note: "Same price in person. Video visits are $10.", approval: "Not needed", spec: "therapy" },
+    { re: /urgent care/, name: "Urgent care", covered: true, pay: "$75 per visit", note: "An emergency room visit is $250, so urgent care can save you money when it is not an emergency.", approval: "Not needed" },
+    { re: /emergency room|\ber\b/, name: "Emergency room", covered: true, pay: "$250 per visit", note: "Covered at any hospital, in network or not. The copay is dropped if you are admitted.", approval: "Never needed in an emergency" },
+    { re: /video|telehealth|virtual/, name: "Video visits", covered: true, pay: "$10 per visit", note: "Available every day, usually within 15 minutes.", approval: "Not needed" },
+    { re: /dermatolog|skin/, name: "Dermatology visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "derm" },
+    { re: /primary care|pcp|family doctor/, name: "Primary care visits", covered: true, pay: "$25 per visit", note: "Yearly checkups are $0. Video visits are $10.", approval: "Not needed", spec: "primary" },
+    { re: /orthop|bone and joint/, name: "Orthopedic visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "ortho" },
+    { re: /eye care|eye exam|eye doctor|vision/, name: "Eye care visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "eye" },
+  ];
+
+  // prices the plan has agreed to, used for cost estimates
+  const ESTIMATES = [
+    { re: /\bmri\b|scan|imaging/, name: "MRI of the knee", needsApproval: true, places: [
+      { name: "Lakeside Imaging Center", dist: "2.1 mi", price: 900 },
+      { name: "City General Hospital", dist: "3.4 mi", price: 1800 },
+    ] },
+  ];
+
+  /* =========================================================
+     2. THE "BRAIN"
+     understand(text) turns what the member typed into a small UI spec:
+       { say: "one or two short sentences", ui: [{ type, props }], next: ["follow up", ...] }
+     Here it is simple keyword matching. To make it real, replace this
+     function with a call to your model and have it return the same shape.
+     The page only ever draws card types it knows (see MODULES below).
+     ========================================================= */
+
+  const HOME_CHIPS = ["Schedule a visit", "What will an MRI cost?", "Is physical therapy covered?", "Find a dermatologist", "Where is my claim?", "Show my ID card", "Talk to a person"];
+
+  // the member's part of a price: the rest of the deductible first, then 20% of what is left
+  function yourShare(price) {
+    const left = Math.max(0, USAGE.deductible[1] - USAGE.deductible[0]);
+    const toDeductible = Math.min(price, left);
+    const share = Math.round((price - toDeductible) * 0.2);
+    return { price, toDeductible, rest: price - toDeductible, share, you: toDeductible + share, plan: price - toDeductible - share };
+  }
+
+  function findSpecialty(t) { return SPECIALTIES.find((s) => s.re.test(t)) || null; }
+  function findDoctor(t) {
+    for (const key of Object.keys(DOCS)) for (const d of docsFor(key)) {
+      const [first, last] = d.name.replace(/^Dr\.\s+/, "").replace(/,.*$/, "").toLowerCase().split(" ");
+      if (new RegExp("\\b(dr\\.?|doctor|with|" + first + ") " + last + "\\b").test(t)) return d;
+    }
+    return null;
+  }
+
+  // Safety words. These are checked first and always win, even when a draft card is open.
+  // A real product needs much more than a word list here. This is only a stand-in.
+  const CRISIS = /suicid|kill(ing)? myself|hurt(ing)? myself|self.?harm|end(ing)? (my life|it all)|want to die|(don.?t|do not) want to (live|be here|be alive)|take my (own )?life/;
+  const SYMPTOMS = /chest (pain|hurt|tight|pressure|is tight)|heart attack|(can.?t|cannot|can not|hard to|not|stopped) breath|trouble breathing|short of breath|stroke|overdose|(took|taken|had|swallowed) too (many|much)|too many pills|swallowed|poison(?! ivy| oak)|bleeding|unconscious|passed out|seizure|choking|severe/;
+  function urgency(text) {
+    const t = String(text).toLowerCase();
+    if (CRISIS.test(t)) return "crisis";
+    if (SYMPTOMS.test(t)) return "emergency";
+    // "is the emergency room covered?" is a money question, not an emergency
+    const aboutTheER = /emergency room|\ber\b/.test(t) && /cover|cost|how much|copay|price|pay/.test(t);
+    if (/emergency|\b911\b/.test(t) && !aboutTheER) return "emergency";
+    return null;
+  }
+  const isUrgent = (text) => urgency(text) !== null;
+
+  function understand(text) {
+    const t = text.toLowerCase().trim();
+
+    // safety first
+    const urgent = urgency(t);
+    if (urgent === "crisis")
+      return { say: "I am really glad you told me. You do not have to handle this alone. You can call or text 988 right now and talk to someone.", ui: [{ type: "urgent", props: { crisis: true } }], next: ["Talk to a person"] };
+    if (urgent === "emergency")
+      return { say: "If this could be an emergency, call 911 now. If it can wait a little, here are fast ways to get care.", ui: [{ type: "urgent", props: { poison: /swallow|poison|too (many|much)|overdose/.test(t) } }], next: ["Find urgent care near me", "Talk to a person"] };
+
+    if (/id card|member id|insurance card|my card|member number/.test(t))
+      return { say: "Here is your member ID card. You can show this at any visit.", ui: [{ type: "idcard", props: {} }], next: ["Schedule a visit", "My deductible"] };
+
+    if (/what is a deductible|what does deductible mean/.test(t))
+      return { say: "A deductible is the amount you pay for care each year before your plan starts to share the cost. Checkups and other preventive care are $0 even before you reach it.", ui: [], next: ["My deductible", "Is physical therapy covered?"] };
+    if (/deductible|out.of.pocket|how much have i (paid|spent|met)|my spending/.test(t)) {
+      const left = USAGE.deductible[1] - USAGE.deductible[0];
+      return { say: `You have paid ${money(USAGE.deductible[0])} of your ${money(USAGE.deductible[1])} deductible. After ${money(left)} more, your plan starts paying most of the bill.`, ui: [{ type: "usage", props: {} }], next: ["What is a deductible?", "Where is my claim?"] };
+    }
+
+    if (/prior auth|pre.?auth|authoriz|approval status|approved|my approval|waiting (for|on) approval/.test(t))
+      return { say: "Your MRI request is with your plan now. You do not need to do anything. A decision is due within a week.", ui: [{ type: "approval", props: {} }], next: ["What will an MRI cost?", "Talk to a person"] };
+
+    if (/how much|cost|price|estimate|what will i (pay|owe)/.test(t)) {
+      const e = ESTIMATES.find((x) => x.re.test(t));
+      if (e) {
+        const low = Math.min(...e.places.map((pl) => yourShare(pl.price).you));
+        return { say: `An MRI would cost you about ${money(low)} at the lower priced place near you. Here is how I got that number.`, ui: [{ type: "cost", props: { estimate: e } }], next: ["Is my MRI approved?", "My deductible", "Find a bone and joint doctor"] };
+      }
+    }
+
+    if (/looks wrong|is wrong|complain|appeal|dispute/.test(t))
+      return { say: "Sure. I can have a person call you. I will pass along what we talked about so you do not have to repeat it.", ui: [{ type: "handoff", props: { topic: "A problem with a claim" } }], next: ["Where is my claim?", "Show my ID card"] };
+
+    if (/claim|\bbill|\beob\b|charged|\bowe\b/.test(t))
+      return claimPaid ? { say: "Your latest claim is paid in full. You do not owe anything.", ui: [{ type: "claim", props: {} }], next: ["My deductible", "Show my ID card"] } : { say: "Your latest claim is finished. Your plan paid its part and you owe $25.", ui: [{ type: "claim", props: {} }], next: ["Something looks wrong", "My deductible"] };
+
+    if (/refill|prescription|medication|medicine|\brx\b|pharmacy/.test(t))
+      return { say: "You have one refill ready. Check the details and confirm, and I will send it to the pharmacy.", ui: [{ type: "refill", props: {} }], next: ["Show my ID card", "My deductible"] };
+
+    const doctor = findDoctor(t);
+    const wantsBooking = /schedul|book|appointment|appt|make a visit|set up a visit|see (a|an|my|the) |visit with|check-?up|get in to see/.test(t);
+    if (doctor || wantsBooking) {
+      const spec = doctor ? SPEC[doctor.spec] : findSpecialty(t) || SPEC.primary;
+      const doc = doctor || docsFor(spec.key)[0];
+      const found = REASONS.find(([re]) => re.test(t));
+      const reason = found ? found[1] : spec.reason;
+      const video = /video|virtual|online|telehealth/.test(t);
+      const days = upcomingWeekdays(5);
+      let day = doctor ? doctor.i : 0, dayAsked = "";
+      const names = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+      names.forEach((n, i) => { if (t.includes(n)) { const k = days.findIndex((d) => d.getDay() === i); if (k >= 0) { day = k; dayAsked = n[0].toUpperCase() + n.slice(1); } } });
+      if (/next week/.test(t)) { const k = days.findIndex((d, i) => i > 0 && d.getDay() === 1); if (k >= 0) day = k; }
+      const slot = /afternoon|after work|evening|late/.test(t) ? 2 : /noon|lunch|midday/.test(t) ? 1 : 0;
+      const about = found ? ` about ${reason.toLowerCase()}` : "";
+      const kind = video ? "video visit" : "visit";
+      const say = dayAsked
+        ? `I found a ${kind} with ${doc.name} on ${dayAsked}${about}. Check the details, change anything, then confirm.`
+        : `Here is the soonest ${kind} with ${doc.name}${about}. Check the details, change anything, then confirm.`;
+      return { say, ui: [{ type: "schedule", props: { doc, reason, video, day, slot } }], next: [video ? "In person instead" : "Video instead", "A day later", "Morning works better", `Find another ${spec.one.replace(/^an? /, "")}`] };
+    }
+
+    if (/find|look for|search|near me|in.?network|who can i see|need (a|an) /.test(t)) {
+      if (/urgent care/.test(t))
+        return { say: "Here are the fastest ways to get care today. None of these need an appointment.", ui: [{ type: "urgent", props: { calm: true } }], next: ["Is urgent care covered?", "Talk to a person"] };
+      const spec = findSpecialty(t) || SPEC.primary;
+      return { say: `I found 3 ${spec.noun} near you. All of them are in your network, so you pay the lower price.`, ui: [{ type: "providers", props: { spec: spec.key } }], next: [`Is ${spec.label.toLowerCase()} covered?`, "Show my ID card"] };
+    }
+
+    if (/cover|pay for|how much|cost|price|do i need (a referral|approval)|included/.test(t)) {
+      const b = BENEFITS.find((x) => x.re.test(t));
+      if (b) {
+        const say = b.covered ? `Yes, ${b.name.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())} ${/s$/.test(b.name) ? "are" : "is"} covered. Here is what you would pay.` : `${b.name} is not covered by your plan, so you would pay the full price.`;
+        const next = [];
+        if (b.next) next.push(b.next);
+        next.push("Schedule a visit", "Talk to a person");
+        return { say, ui: [{ type: "coverage", props: { benefit: b } }], next };
+      }
+      return { say: "I could not find that in your plan summary, and I do not want to guess. A person on our team can check it for you.", ui: [{ type: "handoff", props: { topic: text } }], next: ["Is physical therapy covered?", "Is an MRI covered?"] };
+    }
+
+    if (/talk to|speak (to|with)|call me|human|a person|real person|agent|representative|nurse|something looks wrong|complain|appeal/.test(t))
+      return { say: "Sure. I can have a person call you. I will pass along what we talked about so you do not have to repeat it.", ui: [{ type: "handoff", props: { topic: /wrong|appeal|complain/.test(t) ? "A problem with a claim" : "" } }], next: ["Where is my claim?", "Show my ID card"] };
+
+    if (/^(hi|hey|hello|yo|good (morning|afternoon|evening))\b/.test(t))
+      return { say: `Hi ${MEMBER.first}. I can book visits, check what your plan covers, track claims and more. What do you need?`, ui: [], next: HOME_CHIPS };
+    if (/thank/.test(t))
+      return { say: "Any time. I am here if you need anything else.", ui: [], next: HOME_CHIPS };
+
+    return { unknown: true, say: "I am not sure about that one yet. This is a prototype, so I only know a few things. Try one of these.", ui: [], next: HOME_CHIPS };
+  }
+
+  /* =========================================================
+     3. CARDS ("modules")
+     Each one takes props and returns a card element. Anything that
+     changes something in the real world is a draft until the member
+     confirms it.
+     ========================================================= */
+
+  const ICON = {
+    cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="4"/><path d="M8 3v4M16 3v4M3.5 10.5h17"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 5 5.8v5.7c0 4.3 2.9 7.7 7 9.3 4.1-1.6 7-5 7-9.3V5.8z"/><path d="m9 12 2.2 2.2L15.2 10"/></svg>',
+    pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+    doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h7.5L19 8v10.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z"/><path d="M9 12.5h6M9 16h4"/></svg>',
+    card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5.5" width="18" height="13" rx="3.5"/><path d="M7 10.5h4M7 14h7"/></svg>',
+    chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5h16M7 16v-4M12 16V7M17 16v-6.5"/></svg>',
+    pill: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.8" y="8.5" width="18.4" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="m9.4 8.3 5.2 7.4"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 4h2.3l1.4 3.8-1.8 1.4a11 11 0 0 0 6.4 6.4l1.4-1.8 3.8 1.4v2.3a2 2 0 0 1-2.2 2A15.5 15.5 0 0 1 4.5 6.2a2 2 0 0 1 2-2.2z"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3.5 19h17z"/><path d="M12 10v4M12 16.8v.2"/></svg>',
+    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5l2.5 2.5M15 15l2.5 2.5M17.5 6.5 15 9M9 15l-2.5 2.5"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5.5 12.5 4.3 4.3 8.7-9.3"/></svg>',
+  };
+
+  let seq = 0;
+
+  function shell(kind, icon, pill = "") {
+    const el = document.createElement("section");
+    const id = "mod" + (++seq);
+    el.className = "mod";
+    el.setAttribute("aria-labelledby", id);
+    el.innerHTML =
+      `<div class="mod__ghost" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+       <header class="mod__head"><h2 class="mod__kind" id="${id}">${icon}<span>${esc(kind)}</span></h2>${pill}</header>
+       <div class="mod__body"></div>
+       <div class="mod__actions"></div>`;
+    return { el, id, body: $(".mod__body", el), actions: $(".mod__actions", el), pill: () => $(".pill", el) };
+  }
+
+  // number the parts so they arrive one after another
+  function stagger(el) { el.querySelectorAll(".part").forEach((p, i) => p.style.setProperty("--i", i)); }
+
+  // change a card's content and glide its height to the new size
+  function morph(el, change) {
+    const from = el.offsetHeight;
+    change();
+    stagger(el);
+    if (reduceMotion.matches) return;
+    const to = el.offsetHeight;
+    if (from === to) return;
+    el.style.height = from + "px";
+    el.style.overflow = "hidden";
+    el.offsetHeight;                               // lock in the start height
+    el.style.transition = "height 0.45s cubic-bezier(0.22, 0.9, 0.3, 1)";
+    el.style.height = to + "px";
+    const done = () => { el.style.height = el.style.overflow = el.style.transition = ""; el.removeEventListener("transitionend", done); };
+    el.addEventListener("transitionend", done);
+    setTimeout(done, 600);
+  }
+
+  // after a card changes state its old buttons are gone, so put focus on the result
+  function landFocus(card) {
+    if (document.activeElement && document.activeElement !== document.body && document.activeElement.isConnected) return;
+    const head = card.querySelector(".done") || card.querySelector(".mod__kind");
+    if (!head) return;
+    head.setAttribute("tabindex", "-1");
+    head.focus({ preventScroll: true });
+  }
+
+  /* ---- dates ---- */
+  function upcomingWeekdays(n) {
+    const out = [], d = new Date();
+    d.setHours(0, 0, 0, 0);
+    while (out.length < n) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) out.push(new Date(d)); }
+    return out;
+  }
+  const fmt = (d, o) => new Intl.DateTimeFormat("en-US", o).format(d);
+  const SLOTS = [["9:00 AM", "10:30 AM", "2:15 PM"], ["8:30 AM", "11:00 AM", "3:45 PM"], ["9:45 AM", "1:00 PM", "4:30 PM"], ["10:00 AM", "12:15 PM", "2:45 PM"], ["8:15 AM", "11:30 AM", "4:00 PM"]];
+
+  const MODULES = {};
+
+  /* ---- appointment: draft, then confirm ---- */
+  MODULES.schedule = (p, api) => {
+    const m = shell("Appointment", ICON.cal, '<span class="pill">Draft</span>');
+    const n = m.id, doc = p.doc, spec = SPEC[doc.spec], days = upcomingWeekdays(5);
+    const st = { day: clamp(p.day || 0, 0, 4), slot: clamp(p.slot || 0, 0, 2), video: !!p.video };
+
+    m.body.innerHTML =
+      `<div class="who part"><span class="who__pic" aria-hidden="true">${esc(initials(doc.name))}</span>
+         <span class="who__txt"><b>${esc(doc.name)}</b><span>${esc(spec.label)} · <em class="ok">In network</em></span></span></div>
+       <div class="row part" data-row="reason"><label class="row__label" for="${n}-reason">Reason</label>
+         <input class="inline-input" id="${n}-reason" type="text" maxlength="60" autocomplete="off" enterkeyhint="done" /></div>
+       <div class="row row--stack part" data-row="day"><span class="row__label" id="${n}-dl">Day</span>
+         <div class="opts opts--days" role="radiogroup" aria-labelledby="${n}-dl">${days.map((d, i) =>
+           `<label class="opt"><input type="radio" name="${n}-day" value="${i}" aria-label="${esc(fmt(d, { weekday: "long", month: "long", day: "numeric" }))}"${i === st.day ? " checked" : ""} /><span><small>${fmt(d, { weekday: "short" })}</small><b>${d.getDate()}</b></span></label>`).join("")}</div></div>
+       <div class="row row--stack part" data-row="time"><span class="row__label" id="${n}-tl">Time</span>
+         <div class="opts" role="radiogroup" aria-labelledby="${n}-tl" data-times></div></div>
+       <div class="row part" data-row="type"><span class="row__label" id="${n}-vl">Visit</span>
+         <div class="opts opts--seg" role="radiogroup" aria-labelledby="${n}-vl">
+           <label class="opt"><input type="radio" name="${n}-type" value="office"${st.video ? "" : " checked"} /><span>In person</span></label>
+           <label class="opt"><input type="radio" name="${n}-type" value="video"${st.video ? " checked" : ""} /><span>Video</span></label></div></div>
+       <div class="row part" data-row="where"><span class="row__label">Where</span><div class="row__val" data-where></div></div>
+       <div class="row part" data-row="cost"><span class="row__label">You pay</span><div class="row__val"><b class="money" data-cost></b><span class="note" data-costnote></span></div></div>
+       <p class="fine part">I picked the day and time for you. Tap anything to change it, or just tell me. Nothing is booked until you confirm.</p>`;
+    m.actions.innerHTML =
+      `<button class="btn btn--primary part" type="button" data-confirm></button>
+       <button class="btn btn--text part" type="button" data-skip>Not now</button>`;
+
+    const reasonEl = $(`#${n}-reason`, m.el);
+    reasonEl.value = p.reason;
+    const timesEl = $("[data-times]", m.el), whereEl = $("[data-where]", m.el), costEl = $("[data-cost]", m.el), noteEl = $("[data-costnote]", m.el), confirmBtn = $("[data-confirm]", m.el);
+
+    const free = () => doc.spec === "primary" && /check-?up|annual|yearly|vaccine|flu shot/i.test(reasonEl.value);
+    const cost = () => (free() ? 0 : spec.pay[st.video ? 1 : 0]);
+    const when = () => `${fmt(days[st.day], { weekday: "short", month: "short", day: "numeric" })} at ${SLOTS[st.day][st.slot]}`;
+    function drawTimes() {
+      timesEl.innerHTML = SLOTS[st.day].map((s, i) =>
+        `<label class="opt"><input type="radio" name="${n}-time" value="${i}"${i === st.slot ? " checked" : ""} /><span>${s}</span></label>`).join("");
+    }
+    function draw() {
+      whereEl.innerHTML = st.video
+        ? `<b>Video visit</b><span class="note">We will text you a link 10 minutes before.</span>`
+        : `<b>${esc(doc.place)}</b><span class="note">${esc(doc.addr)} · ${esc(doc.dist)} away</span>`;
+      costEl.textContent = money(cost());
+      noteEl.textContent = free() ? "Yearly checkups and vaccines are $0 with your plan." : "This is your copay for the visit. Tests or treatment can cost extra.";
+      confirmBtn.textContent = `Confirm ${fmt(days[st.day], { weekday: "short" })} ${SLOTS[st.day][st.slot]}`;
+    }
+    drawTimes(); draw();
+
+    m.el.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t.name === `${n}-day`) { st.day = +t.value; drawTimes(); }
+      if (t.name === `${n}-time`) st.slot = +t.value;
+      if (t.name === `${n}-type`) st.video = t.value === "video";
+      draw();
+    });
+    reasonEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); reasonEl.blur(); } });
+    reasonEl.addEventListener("input", draw);
+
+    // lets the chat bar change this same card ("make it Thursday", "video instead")
+    const check = (name, value) => { const r = m.el.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
+    const draft = {
+      kind: "visit", open: true, el: m.el,
+      state: () => ({ day: st.day, slot: st.slot, video: st.video, days }),
+      describe: () => `${fmt(days[st.day], { weekday: "long" })} at ${SLOTS[st.day][st.slot]}${st.video ? ", by video" : ""}`,
+      set(patch) {
+        const changed = [];
+        if (patch.day != null && clamp(patch.day, 0, 4) !== st.day) { st.day = clamp(patch.day, 0, 4); check(`${n}-day`, st.day); drawTimes(); changed.push("day", "time"); }
+        if (patch.slot != null && clamp(patch.slot, 0, 2) !== st.slot) { st.slot = clamp(patch.slot, 0, 2); drawTimes(); changed.push("time"); }
+        if (patch.video != null && patch.video !== st.video) { st.video = patch.video; check(`${n}-type`, st.video ? "video" : "office"); changed.push("type", "where", "cost"); }
+        if (patch.reason && patch.reason !== reasonEl.value) { reasonEl.value = patch.reason; changed.push("reason"); }
+        draw();
+        [...new Set(changed)].forEach((name) => {
+          const row = m.el.querySelector(`[data-row="${name}"]`);
+          if (row) { row.classList.remove("flash"); row.offsetWidth; row.classList.add("flash"); }
+        });
+        return changed;
+      },
+      help: "I can change the day, the time of day, or switch to video. Try Thursday afternoon. Say confirm when it looks right.",
+      costLine: () => `This visit would cost you ${money(cost())}. ${free() ? "Yearly checkups and vaccines are $0 with your plan." : "That is your copay."} Say confirm when it looks right.`,
+      confirm: () => confirmBtn.click(),
+      skip: () => $("[data-skip]", m.el).click(),
+    };
+    api.draft(draft);
+
+    confirmBtn.addEventListener("click", () => {
+      draft.open = false; api.draft(null);
+      const reason = reasonEl.value.trim() || spec.reason;
+      const whenText = when(), place = st.video ? "Video visit" : `${doc.place}, ${doc.addr}`, price = money(cost());
+      const code = "V-" + String(48213 + seq * 37).slice(-5);
+      morph(m.el, () => {
+        m.pill().textContent = "Booked"; m.pill().className = "pill pill--ok";
+        m.body.innerHTML =
+          `<div class="done part"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>You are booked</b><span>${esc(whenText)}</span></div></div>
+           <div class="row part"><span class="row__label">With</span><div class="row__val"><b>${esc(doc.name)}</b><span class="note">${esc(spec.label)}</span></div></div>
+           <div class="row part"><span class="row__label">Where</span><div class="row__val">${esc(place)}</div></div>
+           <div class="row part"><span class="row__label">Reason</span><div class="row__val">${esc(reason)}</div></div>
+           <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b>${price}</b> at the visit</div></div>
+           <p class="fine part">Confirmation ${code}. Bring your member ID card and arrive 10 minutes early.</p>`;
+        m.actions.innerHTML =
+          `<button class="btn btn--quiet part" type="button" data-ics>Add to calendar</button>
+           <button class="btn btn--text part" type="button" data-cancel>Cancel this visit</button>`;
+      });
+      landFocus(m.el);
+      $("[data-ics]", m.el).addEventListener("click", () => saveCalendarFile(days[st.day], SLOTS[st.day][st.slot], `Visit with ${doc.name}`, place, reason));
+      $("[data-cancel]", m.el).addEventListener("click", (e) => {
+        const btn = e.currentTarget;
+        if (!btn.dataset.armed) {                 // first tap asks, second tap cancels
+          btn.dataset.armed = "1";
+          btn.textContent = "Yes, cancel this visit";
+          btn.className = "btn btn--quiet part";
+          btn.style.color = "var(--red-ink)";
+          statusEl.textContent = "Press again to cancel this visit.";
+          return;
+        }
+        morph(m.el, () => {
+          m.el.classList.add("is-muted");
+          m.pill().textContent = "Cancelled"; m.pill().className = "pill";
+          m.actions.innerHTML = "";
+          const d = $(".done b", m.el); if (d) d.textContent = "Visit cancelled";
+        });
+        landFocus(m.el);
+        if (todayRow) todayRow.undo();
+        api.say("Okay, I cancelled that visit. You will not be charged.", ["Schedule a visit", "Find another doctor"]);
+      });
+      api.celebrate(m.el);
+      const todayRow = todayDone(/checkup/i.test(reason) ? "checkup" : "", "Visit booked", `${doc.name} · ${whenText}`);
+      api.say(`Done. You are booked for ${whenText}. I will remind you the day before.`, ["Show my ID card", "My deductible"]);
+    });
+
+    $("[data-skip]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
+      morph(m.el, () => {
+        m.el.classList.add("is-muted");
+        m.pill().textContent = "Not booked";
+        m.el.querySelectorAll("input").forEach((i) => (i.disabled = true));
+        m.actions.innerHTML = "";
+      });
+      landFocus(m.el);
+      api.say("No problem. Nothing was booked.", HOME_CHIPS);
+    });
+    return m.el;
+  };
+
+  /* ---- find care: a row of small cards ---- */
+  MODULES.providers = (p, api) => {
+    const spec = SPEC[p.spec], days = upcomingWeekdays(5);
+    const strip = document.createElement("div");
+    strip.className = "strip";
+    strip.setAttribute("role", "list");
+    strip.setAttribute("aria-label", `${spec.label} near you`);
+    docsFor(p.spec).forEach((doc, i) => {
+      const m = shell(doc.name, "", '<span class="pill pill--ok">In network</span>');
+      m.el.setAttribute("role", "listitem");
+      $(".mod__kind", m.el).classList.add("sr-only");
+      m.el.style.animationDelay = `${i * 90}ms`;
+      m.body.innerHTML =
+        `<div class="who part"><span class="who__pic" aria-hidden="true">${esc(initials(doc.name))}</span>
+           <span class="who__txt"><b>${esc(doc.name)}</b><span>${esc(doc.dist)} away</span></span></div>
+         <div class="mini part"><span><b>${esc(doc.place)}</b></span><span>Next opening: ${fmt(days[i], { weekday: "short" })} at ${SLOTS[i][0]}</span><span>You pay ${money(spec.pay[0])} per visit</span></div>`;
+      m.actions.innerHTML = `<button class="btn btn--quiet part" type="button">Book a visit</button>`;
+      $("button", m.actions).addEventListener("click", () => api.ask(`Book a visit with ${doc.name}`));
+      strip.appendChild(m.el);
+    });
+    return strip;
+  };
+
+  /* ---- is it covered? ---- */
+  MODULES.coverage = (p, api) => {
+    const b = p.benefit;
+    const m = shell("Coverage", ICON.shield, b.covered ? '<span class="pill pill--ok">Covered</span>' : '<span class="pill pill--warn">Not covered</span>');
+    const limit = b.limit ? `<div class="row part"><span class="row__label">Limit</span><div class="row__val"><b>${b.limit[1]} of ${b.limit[2]} visits used</b> this year<span class="note">${b.limit[2] - b.limit[1]} visits left</span><div class="meter" aria-hidden="true"><i data-fill="${(b.limit[1] / b.limit[2]) * 100}"></i></div></div></div>` : "";
+    const approval = b.approval ? `<div class="row part"><span class="row__label">Approval</span><div class="row__val">${b.warn ? `<b style="color:var(--amber-ink)">${esc(b.approval)}</b>` : esc(b.approval)}</div></div>` : "";
+    m.body.innerHTML =
+      `<div class="verdict part"><b>${esc(b.name)}</b></div>
+       <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b class="money">${esc(b.pay)}</b><span class="note">${esc(b.note)}</span></div></div>
+       ${limit}${approval}
+       <p class="fine part">From your ${esc(MEMBER.plan)} plan summary, for in-network care. This is an estimate, not a bill.</p>`;
+    if (b.spec) {
+      m.actions.innerHTML = `<button class="btn btn--quiet part" type="button">Find ${esc(SPEC[b.spec].one)}</button>`;
+      $("button", m.actions).addEventListener("click", () => api.ask(`Find ${SPEC[b.spec].one} near me`));
+    }
+    return m.el;
+  };
+
+  /* ---- what will it cost? shows the number first, then the math ---- */
+  MODULES.cost = (p, api) => {
+    const e = p.estimate, n = "c" + (++seq);
+    const m = shell("Cost estimate", ICON.chart, '<span class="pill pill--warn">Estimate</span>');
+    let pick = e.places.reduce((best, pl, i) => (yourShare(pl.price).you < yourShare(e.places[best].price).you ? i : best), 0);
+    m.body.innerHTML =
+      `<div class="verdict part" style="padding-bottom:4px"><b>${esc(e.name)}</b></div>
+       <div class="keyfact part"><b data-you></b><span data-at></span></div>
+       <div class="row row--stack part"><span class="row__label" id="${n}-pl">Where</span>
+         <div class="opts opts--list" role="radiogroup" aria-labelledby="${n}-pl">${e.places.map((pl, i) =>
+           `<label class="opt"><input type="radio" name="${n}-place" value="${i}"${i === pick ? " checked" : ""} /><span><b>${esc(pl.name)}</b><em>${money(yourShare(pl.price).you)}</em></span></label>`).join("")}</div></div>
+       <details class="math part"><summary>Show the math</summary><div class="sum" data-math></div></details>
+       <p class="fine part">Based on your ${esc(MEMBER.plan)} plan and what you have paid so far this year. This is an estimate, not a bill. The final amount can change.${e.needsApproval ? " An MRI needs approval from your plan first." : ""}</p>`;
+    const youEl = $("[data-you]", m.el), atEl = $("[data-at]", m.el), mathEl = $("[data-math]", m.el);
+    function draw() {
+      const pl = e.places[pick], x = yourShare(pl.price);
+      youEl.textContent = "About " + money(x.you);
+      atEl.textContent = `at ${pl.name} · ${pl.dist} away`;
+      mathEl.innerHTML =
+        `<div><span>Price your plan agreed to</span><span>${money(x.price)}</span></div>
+         <div><span>Left on your deductible (you pay this first)</span><span>${money(x.toDeductible)}</span></div>
+         <div><span>Your 20% of the other ${money(x.rest)}</span><span>${money(x.share)}</span></div>
+         <div><span>Your plan pays</span><span>${money(x.plan)}</span></div>
+         <div class="sum__total"><span>You pay about</span><span>${money(x.you)}</span></div>`;
+    }
+    draw();
+    m.el.addEventListener("change", (ev) => { if (ev.target.name === `${n}-place`) { pick = +ev.target.value; draw(); } });
+    if (e.needsApproval) {
+      m.actions.innerHTML = `<button class="btn btn--quiet part" type="button">Check my approval</button>`;
+      $("button", m.actions).addEventListener("click", () => api.ask("Is my MRI approved?"));
+    }
+    return m.el;
+  };
+
+  /* ---- approval from the plan before care (prior authorization) ---- */
+  MODULES.approval = (p, api) => {
+    const m = shell("Approval", ICON.shield, '<span class="pill pill--warn">In review</span>');
+    const day = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return fmt(d, { month: "short", day: "numeric" }); };
+    m.body.innerHTML =
+      `<div class="who part"><span class="who__pic" aria-hidden="true">GL</span><span class="who__txt"><b>MRI of the knee</b><span>Asked for by Dr. Grace Lin</span></span></div>
+       <div class="steps part" role="list" aria-label="Approval progress">
+         <div class="step" role="listitem"><b>Sent</b>${day(-6)}</div>
+         <div class="step is-now" role="listitem"><b>In review</b>Now</div>
+         <div class="step is-next" role="listitem"><b>Decision</b>By ${day(7)}</div></div>
+       <div class="row part"><span class="row__label">Waiting on</span><div class="row__val"><b>Your plan</b></div></div>
+       <div class="row part"><span class="row__label">You need to</span><div class="row__val"><b>Do nothing right now</b><span class="note">Please wait to book the MRI until this is decided.</span></div></div>
+       <p class="fine part">I will show the decision here as soon as your plan makes it. I cannot predict the answer.</p>`;
+    m.actions.innerHTML = `<button class="btn btn--quiet part" type="button" data-notify aria-pressed="false">Text me when it is decided</button>`;
+    const btn = $("[data-notify]", m.el);
+    btn.addEventListener("click", () => {
+      const on = btn.getAttribute("aria-pressed") !== "true";
+      btn.setAttribute("aria-pressed", String(on));
+      btn.textContent = on ? "You will get a text. Tap to undo." : "Text me when it is decided";
+      statusEl.textContent = on ? "You will get a text when it is decided." : "Text reminder turned off.";
+    });
+    return m.el;
+  };
+
+  /* ---- claim status ---- */
+  let claimPaid = false;
+  MODULES.claim = (p, api) => {
+    const m = shell("Claim", ICON.doc, '<span class="pill pill--ok">Paid</span>');
+    m.body.innerHTML =
+      `<div class="who part"><span class="who__pic" aria-hidden="true">MC</span><span class="who__txt"><b>Office visit</b><span>Dr. Maya Chen · Oct 28</span></span></div>
+       <div class="steps part" role="list" aria-label="Claim progress">
+         <div class="step" role="listitem"><b>Received</b>Oct 30</div>
+         <div class="step" role="listitem"><b>Reviewed</b>Nov 4</div>
+         <div class="step" role="listitem"><b>Paid</b>Nov 8</div></div>
+       <div class="sum part">
+         <div><span>Doctor billed</span><span>$240.00</span></div>
+         <div><span>Plan discount</span><span>− $95.00</span></div>
+         <div><span>Plan paid</span><span>− $120.00</span></div>
+         <div class="sum__total"><span>${claimPaid ? "You paid" : "You owe"}</span><span>$25.00</span></div></div>
+       <p class="fine part">Your bill from the doctor should say $25. If it says more, tell me and I will help.</p>`;
+    const paid = `<div class="done part" style="padding:6px 0 0"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>Paid $25.00</b><span>Card ending 4417 · receipt sent by email</span></div></div>`;
+    if (claimPaid) { m.actions.innerHTML = paid; return m.el; }
+    m.actions.innerHTML =
+      `<button class="btn btn--primary part" type="button" data-pay>Pay $25</button>
+       <button class="btn btn--text part" type="button" data-wrong>Something looks wrong</button>`;
+    $("[data-pay]", m.el).addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      if (btn.dataset.armed) {
+        claimPaid = true;
+        morph(m.el, () => { m.actions.innerHTML = paid; });
+        landFocus(m.el);
+        api.celebrate(m.el);
+        todayDone("claim", "Claim paid in full", "Office visit on Oct 28");
+        api.say("Thanks. That claim is all done.", ["My deductible", "Show my ID card"]);
+      } else {
+        btn.dataset.armed = "1";
+        btn.textContent = "Confirm: pay $25 with card ending 4417";
+        statusEl.textContent = "Press again to confirm the payment of 25 dollars.";
+      }
+    });
+    $("[data-wrong]", m.el).addEventListener("click", () => api.ask("Something looks wrong"));
+    return m.el;
+  };
+
+  /* ---- member ID card ---- */
+  MODULES.idcard = () => {
+    const m = shell("Member ID", ICON.card);
+    m.body.innerHTML =
+      `<div class="idcard part">
+         <div class="idcard__plan">${esc(MEMBER.plan)}</div>
+         <div>
+           <div class="idcard__name">${esc(MEMBER.name)}</div>
+           <div class="idcard__grid" style="margin-top:10px">
+             <div><span>Member ID</span><b data-id>${esc(MEMBER.id.replace(/\d(?=.*\d{2}$)/g, "•"))}</b></div>
+             <div><span>Group</span><b>${esc(MEMBER.group)}</b></div>
+           </div>
+         </div>
+       </div>
+       <div class="copays part">
+         <div><b>$25</b>Primary</div><div><b>$50</b>Specialist</div><div><b>$75</b>Urgent care</div><div><b>$250</b>ER</div>
+       </div>`;
+    m.actions.innerHTML = `<button class="btn btn--quiet part" type="button" data-show aria-pressed="false">Show full number</button><button class="btn btn--text part" type="button" data-copy>Copy member ID</button>`;
+    const showBtn = $("[data-show]", m.actions), idEl = $("[data-id]", m.el);
+    showBtn.addEventListener("click", () => {
+      const on = showBtn.getAttribute("aria-pressed") !== "true";
+      showBtn.setAttribute("aria-pressed", String(on));
+      showBtn.textContent = on ? "Hide number" : "Show full number";
+      idEl.textContent = on ? MEMBER.id : MEMBER.id.replace(/\d(?=.*\d{2}$)/g, "•");
+    });
+    const btn = $("[data-copy]", m.actions);
+    btn.addEventListener("click", async () => {
+      let ok = false;
+      try { await navigator.clipboard.writeText(MEMBER.id); ok = true; } catch (err) { ok = false; }
+      btn.textContent = ok ? "Copied" : MEMBER.id;
+      statusEl.textContent = ok ? "Member ID copied." : "Member ID " + MEMBER.id;
+      setTimeout(() => { btn.textContent = "Copy member ID"; }, 2200);
+    });
+    return m.el;
+  };
+
+  /* ---- deductible and yearly limit ---- */
+  MODULES.usage = () => {
+    const m = shell("Your spending this year", ICON.chart);
+    const g = (label, [used, max], note) =>
+      `<div class="gauge part"><div class="gauge__top"><span>${label}</span><b>${money(used)} <em>of ${money(max)}</em></b></div>
+         <div class="meter" role="img" aria-label="${label}: ${money(used)} of ${money(max)}"><i data-fill="${(used / max) * 100}"></i></div>
+         <span class="note" style="margin-top:8px">${note}</span></div>`;
+    m.body.innerHTML =
+      g("Deductible", USAGE.deductible, `${money(USAGE.deductible[1] - USAGE.deductible[0])} to go. Then your plan pays 80% for most care.`) +
+      g("Most you could pay this year", USAGE.oop, `After ${money(USAGE.oop[1])}, your plan pays 100% of covered care.`) +
+      `<p class="fine part">Both start over on January 1. Checkups and vaccines are $0 when you stay in network.</p>`;
+    return m.el;
+  };
+
+  /* ---- prescription refill: draft, then confirm ---- */
+  MODULES.refill = (p, api) => {
+    const m = shell("Refill", ICON.pill, '<span class="pill">Draft</span>');
+    const n = m.id, st = { supply: 30, how: "pickup" };
+    m.body.innerHTML =
+      `<div class="who part"><span class="who__pic" aria-hidden="true">Rx</span><span class="who__txt"><b>Atorvastatin 20 mg</b><span>1 tablet a day · 2 refills left</span></span></div>
+       <div class="row part" data-row="supply"><span class="row__label" id="${n}-sl">Supply</span>
+         <div class="opts opts--seg" role="radiogroup" aria-labelledby="${n}-sl">
+           <label class="opt"><input type="radio" name="${n}-supply" value="30" checked /><span>30 days</span></label>
+           <label class="opt"><input type="radio" name="${n}-supply" value="90" /><span>90 days</span></label></div></div>
+       <div class="row row--stack part" data-row="how"><span class="row__label" id="${n}-hl">Get it</span>
+         <div class="opts" role="radiogroup" aria-labelledby="${n}-hl">
+           <label class="opt"><input type="radio" name="${n}-how" value="pickup" checked /><span>Pick up</span></label>
+           <label class="opt"><input type="radio" name="${n}-how" value="mail" /><span>By mail</span></label></div></div>
+       <div class="row part" data-row="where"><span class="row__label">Where</span><div class="row__val" data-where></div></div>
+       <div class="row part" data-row="cost"><span class="row__label">You pay</span><div class="row__val"><b class="money" data-cost></b><span class="note" data-note></span></div></div>
+       <p class="fine part">Tap to change it, or just tell me. Nothing is ordered until you confirm.</p>`;
+    m.actions.innerHTML = `<button class="btn btn--primary part" type="button" data-confirm></button><button class="btn btn--text part" type="button" data-skip>Not now</button>`;
+    const whereEl = $("[data-where]", m.el), costEl = $("[data-cost]", m.el), noteEl = $("[data-note]", m.el), confirmBtn = $("[data-confirm]", m.el);
+    const cost = () => (st.supply === 90 ? 20 : 10);
+    function draw() {
+      whereEl.innerHTML = st.how === "pickup"
+        ? `<b>Main Street Pharmacy</b><span class="note">Ready after 2:00 PM today</span>`
+        : `<b>Mailed to your home</b><span class="note">Arrives in 3 to 5 days. Shipping is free.</span>`;
+      costEl.textContent = money(cost());
+      noteEl.textContent = st.supply === 90 ? "You save $10 compared with three 30 day refills." : "A 90 day supply costs $20. That saves you $10.";
+      confirmBtn.textContent = `Confirm refill for ${money(cost())}`;
+    }
+    draw();
+    m.el.addEventListener("change", (e) => {
+      if (e.target.name === `${n}-supply`) st.supply = +e.target.value;
+      if (e.target.name === `${n}-how`) st.how = e.target.value;
+      draw();
+    });
+    const draft = {
+      kind: "refill", open: true, el: m.el,
+      describe: () => `a ${st.supply} day supply, ${st.how === "pickup" ? "for pick up" : "sent by mail"}, for ${money(cost())}`,
+      set(patch) {
+        const changed = [];
+        const check = (name, value) => { const r = m.el.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
+        if (patch.supply && patch.supply !== st.supply) { st.supply = patch.supply; check(`${n}-supply`, st.supply); changed.push("supply", "cost"); }
+        if (patch.how && patch.how !== st.how) { st.how = patch.how; check(`${n}-how`, st.how); changed.push("how", "where"); }
+        draw();
+        changed.forEach((name) => { const row = m.el.querySelector(`[data-row="${name}"]`); if (row) { row.classList.remove("flash"); row.offsetWidth; row.classList.add("flash"); } });
+        return changed;
+      },
+      help: "I can make it a 90 day supply or send it by mail. Say confirm when it looks right.",
+      confirm: () => confirmBtn.click(),
+      skip: () => $("[data-skip]", m.el).click(),
+    };
+    api.draft(draft);
+    confirmBtn.addEventListener("click", () => {
+      draft.open = false; api.draft(null);
+      const line = st.how === "pickup" ? "Ready after 2:00 PM today at Main Street Pharmacy" : "Arrives by mail in 3 to 5 days";
+      morph(m.el, () => {
+        m.pill().textContent = "Ordered"; m.pill().className = "pill pill--ok";
+        m.body.innerHTML =
+          `<div class="done part"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>Refill ordered</b><span>${line}</span></div></div>
+           <div class="row part"><span class="row__label">Medicine</span><div class="row__val"><b>Atorvastatin 20 mg</b><span class="note">${st.supply} day supply</span></div></div>
+           <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b>${money(cost())}</b> ${st.how === "pickup" ? "at pickup" : "charged when it ships"}</div></div>`;
+        m.actions.innerHTML = "";
+      });
+      landFocus(m.el);
+      api.celebrate(m.el);
+      todayDone("refill", "Refill ordered", line);
+      api.say("Done. I will let you know when it is ready.", ["Show my ID card", "My deductible"]);
+    });
+    $("[data-skip]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
+      morph(m.el, () => { m.el.classList.add("is-muted"); m.pill().textContent = "Not ordered"; m.el.querySelectorAll("input").forEach((i) => (i.disabled = true)); m.actions.innerHTML = ""; });
+      landFocus(m.el);
+      api.say("No problem. Nothing was ordered.", HOME_CHIPS);
+    });
+    return m.el;
+  };
+
+  /* ---- talk to a person ---- */
+  MODULES.handoff = (p, api) => {
+    const m = shell("Talk to a person", ICON.phone, '<span class="pill">Draft</span>');
+    const n = m.id, st = { when: "In 10 minutes" };
+    const topic = (p.topic || api.lastTopic() || "A general question").slice(0, 90);
+    m.body.innerHTML =
+      `<div class="row row--stack part" style="border-top:0;padding-top:2px"><span class="row__label" id="${n}-wl">Call me</span>
+         <div class="opts" role="radiogroup" aria-labelledby="${n}-wl">
+           ${["In 10 minutes", "This afternoon", "Tomorrow morning"].map((w, i) => `<label class="opt"><input type="radio" name="${n}-when" value="${w}"${i ? "" : " checked"} /><span>${w}</span></label>`).join("")}</div></div>
+       <div class="row part"><span class="row__label">Number</span><div class="row__val"><b>(555) 010-0142</b><span class="note">The mobile number on your account</span></div></div>
+       <div class="row part"><span class="row__label">I will share</span><div class="row__val">${esc(topic)}<span class="note">So you do not have to explain it again.</span></div></div>`;
+    m.actions.innerHTML = `<button class="btn btn--primary part" type="button" data-confirm>Request a call</button><button class="btn btn--text part" type="button" data-skip>Not now</button>`;
+    m.el.addEventListener("change", (e) => { if (e.target.name === `${n}-when`) st.when = e.target.value; });
+    const draft = {
+      kind: "call", open: true, el: m.el,
+      help: "Pick a time on the card, then say confirm and I will request the call.",
+      confirm: () => $("[data-confirm]", m.el).click(),
+      skip: () => $("[data-skip]", m.el).click(),
+    };
+    api.draft(draft);
+    $("[data-confirm]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
+      morph(m.el, () => {
+        m.pill().textContent = "Requested"; m.pill().className = "pill pill--ok";
+        m.body.innerHTML = `<div class="done part" style="padding-bottom:4px"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>A person will call you</b><span>${esc(st.when)} at (555) 010-0142</span></div></div>`;
+        m.actions.innerHTML = "";
+      });
+      landFocus(m.el);
+      api.celebrate(m.el);
+      api.say("All set. They will already know what you need.", HOME_CHIPS);
+    });
+    $("[data-skip]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
+      morph(m.el, () => { m.el.classList.add("is-muted"); m.pill().textContent = "Not sent"; m.el.querySelectorAll("input").forEach((i) => (i.disabled = true)); m.actions.innerHTML = ""; });
+      landFocus(m.el);
+      api.say("Okay. I am here if you change your mind.", HOME_CHIPS);
+    });
+    return m.el;
+  };
+
+  /* ---- care right now ---- */
+  MODULES.urgent = (p) => {
+    const m = shell(p.calm ? "Care today" : "Get help now", ICON.alert);
+    // the red banner is itself the call link, so the way to get help is always on screen
+    const top = p.crisis
+      ? `<a class="alert part" href="tel:988">Call or text 988<span>The Suicide and Crisis Lifeline. Free, private, open all day and night.</span></a>`
+      : p.calm ? "" : `<a class="alert part" href="tel:911">Call 911 for an emergency<span>Chest pain, trouble breathing, signs of a stroke, or heavy bleeding.</span></a>`;
+    const poison = p.poison ? `<a class="choice part" href="tel:18002221222"><div><b>Poison Control</b><span>1-800-222-1222 · free, any time</span></div><em>Call</em></a>` : "";
+    m.body.innerHTML = top + (p.crisis
+      ? `<p class="fine part">If you are in danger right now, call 911.</p>`
+      : poison +
+        `<div class="choice part"><div><b>Nurse line</b><span>1-800-555-0134 · any time, day or night</span></div><em>$0</em></div>
+         <div class="choice part"><div><b>Video visit now</b><span>About a 10 minute wait</span></div><em>$10</em></div>
+         <div class="choice part"><div><b>Urgent care near you</b><span>Parkside Urgent Care · 1.4 mi · open until 9 PM</span></div><em>$75</em></div>
+         <p class="fine part">I am not a doctor and cannot tell you how serious this is. If you are unsure, call the nurse line.</p>`);
+    m.actions.innerHTML = p.crisis
+      ? `<a class="btn btn--danger part" href="tel:988">Call 988</a><a class="btn btn--quiet part" href="sms:988">Text 988</a>`
+      : (p.calm ? "" : `<a class="btn btn--danger part" href="tel:911">Call 911</a>`) + `<a class="btn btn--quiet part" href="tel:18005550134">Call the nurse line</a>`;
+    return m.el;
+  };
+
+  /* ---- Today: a short list of things that matter right now (home screen) ---- */
+  const TODAY = [
+    { key: "checkup", icon: "cal",  title: "Yearly checkup is due", sub: "$0 with your plan", verb: "Schedule", ask: "Schedule my yearly checkup" },
+    { key: "claim",   icon: "doc",  title: "A claim was paid",           sub: "Office visit on Oct 28. You owe $25.", verb: "See it", ask: "Where is my claim?" },
+    { key: "refill",  icon: "pill", title: "A refill is ready",          sub: "Atorvastatin 20 mg", verb: "Refill", ask: "Refill my prescription" },
+  ];
+  let todayBody = null;
+  MODULES.today = (p, api) => {
+    const m = shell("Today", ICON.spark);
+    todayBody = m.body;
+    TODAY.forEach((it) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "item part"; b.dataset.key = it.key;
+      b.innerHTML = `<span class="item__dot" aria-hidden="true">${ICON[it.icon]}</span><span class="item__txt"><b>${esc(it.title)}</b><span>${esc(it.sub)}</span></span><em>${esc(it.verb)}</em>`;
+      b.addEventListener("click", () => api.ask(it.ask));
+      m.body.appendChild(b);
+    });
+    return m.el;
+  };
+  // the Today card fills in as things get done
+  function todayDone(key, title, sub) {
+    if (!todayBody) return null;
+    const old = key && todayBody.querySelector(`[data-key="${key}"]`);
+    if (old) old.style.display = "none";
+    const d = document.createElement("div");
+    d.className = "item is-done";
+    d.innerHTML = `<span class="item__dot" aria-hidden="true">${ICON.check}</span><span class="item__txt"><b>${esc(title)}</b><span>${esc(sub)}</span></span>`;
+    todayBody.prepend(d);
+    return { undo() { d.remove(); if (old) old.style.display = ""; } };
+  }
+
+  /* ---- add to calendar (makes a real .ics file) ---- */
+  function saveCalendarFile(day, time, title, place, reason) {
+    const [, hh, mm, ap] = time.match(/(\d+):(\d+)\s*(AM|PM)/);
+    const start = new Date(day);
+    start.setHours((+hh % 12) + (ap === "PM" ? 12 : 0), +mm, 0, 0);
+    const end = new Date(start.getTime() + 30 * 60000);
+    const stamp = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}00`;
+    const clean = (s) => String(s).replace(/([,;\\])/g, "\\$1").replace(/\n/g, " ");
+    const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Member assistant prototype//EN", "BEGIN:VEVENT",
+      `UID:${Date.now()}@member-assistant.example`, `DTSTAMP:${stamp(new Date())}`, `DTSTART:${stamp(start)}`, `DTEND:${stamp(end)}`,
+      `SUMMARY:${clean(title)}`, `LOCATION:${clean(place)}`, `DESCRIPTION:${clean("Reason: " + reason)}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    try {
+      const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = "appointment.ics";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      statusEl.textContent = "Calendar file saved.";
+    } catch (err) { statusEl.textContent = "Could not save the calendar file here."; }
+  }
+
+  /* =========================================================
+     4. THE CONVERSATION
+     ========================================================= */
+
+  let busy = false;
+  let lastAsk = "";
+
+  let contextChips = [];
+  let shownChips = "";
+  function drawChips(list) {
+    const key = list.join("|");
+    if (key === shownChips) return;
+    shownChips = key;
+    chipsEl.innerHTML = "";
+    list.slice(0, 8).forEach((label, i) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "chip"; b.textContent = label;
+      b.style.setProperty("--i", i);
+      b.addEventListener("click", () => { input.value = ""; syncBar(); ask(label); });
+      chipsEl.appendChild(b);
+    });
+    chipsEl.scrollLeft = 0;
+  }
+  // chips that fit the moment (after an answer, or on the home screen)
+  function setChips(list) {
+    contextChips = list || [];
+    if (!input.value.trim()) drawChips(contextChips);
+  }
+
+  // while the member types, the chips guess what they mean
+  const PHRASES = ["Schedule a visit", "Schedule a video visit", "Schedule my yearly checkup", "Find a dermatologist", "Find a therapist",
+    "Find a physical therapist", "Find urgent care near me", "Is physical therapy covered?", "Is an MRI covered?", "Is acupuncture covered?",
+    "Where is my claim?", "Show my ID card", "My deductible", "Refill my prescription", "Talk to a person", "Talk to a nurse",
+    "What will an MRI cost?", "Is my MRI approved?"];
+  function predict(text) {
+    const words = text.toLowerCase().replace(/[?.,!]/g, "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    const scored = [];
+    for (const phrase of PHRASES) {
+      const parts = phrase.toLowerCase().replace(/[?]/g, "").split(" ");
+      let score = 0, ok = true;
+      for (const w of words) {
+        const at = parts.findIndex((x) => x.startsWith(w));
+        if (at < 0) { ok = false; break; }
+        score += 10 - at;
+      }
+      if (ok && phrase.toLowerCase().replace(/[?]/g, "") !== words.join(" ")) scored.push([score, phrase]);
+    }
+    return scored.sort((a, b) => b[0] - a[0]).slice(0, 3).map((x) => x[1]);
+  }
+  // chips and the swipe row: a focused item scrolls into view, and a mouse wheel scrolls the chips sideways
+  document.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (t.closest && t.closest(".chips, .strip") && t.matches(":focus-visible")) t.scrollIntoView({ inline: "center", block: "nearest" });
+  });
+  chipsEl.addEventListener("wheel", (e) => {
+    if (e.deltaX || !e.deltaY || chipsEl.scrollWidth <= chipsEl.clientWidth) return;
+    chipsEl.scrollLeft += e.deltaY; e.preventDefault();
+  }, { passive: false });
+
+  function syncChips() {
+    const text = input.value.trim();
+    if (!text) return drawChips(contextChips);
+    const guesses = predict(text);
+    drawChips(guesses.length ? guesses : contextChips);
+  }
+
+  const dock = $(".dock");
+  let dockH = 150;
+  function sizeLastTurn() {
+    dockH = dock.offsetHeight;
+    app.style.setProperty("--dock-h", dockH + "px");
+    flow.style.setProperty("--turn-min", Math.max(0, page.clientHeight - dockH - 64) + "px");
+  }
+  function showTurn(turn) {
+    sizeLastTurn();
+    turn.scrollIntoView({ block: "start", behavior: reduceMotion.matches ? "auto" : "smooth" });
+  }
+  // scroll just enough to show el, but never push `anchor` off the top
+  function keepInView(el, anchor = el) {
+    const r = el.getBoundingClientRect(), a = anchor.getBoundingClientRect(), p = page.getBoundingClientRect();
+    const need = r.bottom - (p.bottom - dockH) + 24, room = a.top - p.top - 44;
+    if (need > 0 && room > 0) page.scrollBy({ top: Math.min(need, room), behavior: reduceMotion.matches ? "auto" : "smooth" });
+  }
+
+  // the assistant's sentence arrives word by word
+  function speak(turn, text, extraClass = "") {
+    const p = document.createElement("p");
+    p.className = "say " + extraClass;
+    const words = text.split(" ");
+    words.forEach((w, i) => {
+      const s = document.createElement("span");
+      s.className = "w"; s.style.setProperty("--i", i); s.textContent = w;
+      p.appendChild(s);
+      if (i < words.length - 1) p.appendChild(document.createTextNode(" "));
+    });
+    turn.appendChild(p);
+    setTimeout(() => { if (p.isConnected) p.textContent = text; }, reduceMotion.matches ? 0 : words.length * 34 + 600);
+    return wait(pace(Math.min(900, words.length * 34 + 200)));
+  }
+
+  // a card is composed first (soft bars), then its parts arrive
+  async function mount(turn, ui) {
+    const make = MODULES[ui.type];
+    if (!make) return null;                                  // unknown card types are ignored, never drawn
+    const el = make(ui.props || {}, api(turn));
+    const cards = el.classList.contains("mod") ? [el] : [...el.querySelectorAll(".mod")];
+    cards.forEach((c) => { stagger(c); if (!reduceMotion.matches) c.classList.add("is-composing"); });
+    turn.appendChild(el);
+    await wait(pace(420));
+    cards.forEach((c) => { c.classList.remove("is-composing"); c.classList.add("is-built"); });
+    el.querySelectorAll("[data-fill]").forEach((i) => requestAnimationFrame(() => (i.style.width = i.dataset.fill + "%")));
+    return el;
+  }
+
+  // the newest unconfirmed card. The chat bar can change it or confirm it.
+  let activeDraft = null;
+  const liveDrafts = {};
+  function setDraft(d) {
+    if (d) {
+      const old = liveDrafts[d.kind];
+      if (old && old !== d && old.open && old.el.isConnected) {
+        old.open = false;
+        old.el.classList.add("is-muted");
+        const pill = old.el.querySelector(".pill"); if (pill) pill.textContent = "Replaced";
+        old.el.querySelectorAll("input").forEach((i) => (i.disabled = true));
+        const acts = old.el.querySelector(".mod__actions"); if (acts) acts.innerHTML = "";
+      }
+      liveDrafts[d.kind] = d;
+    }
+    activeDraft = d;
+    input.placeholder = d && d.set ? "Tell me what to change" : "Ask anything";
+  }
+  const DAY_RE = [/\bsun(day)?\b/, /\bmon(day)?\b/, /\btue(s|sday)?\b/, /\bwed(nesday)?\b/, /\bthu(r|rs|rsday)?\b/, /\bfri(day)?\b/, /\bsat(urday)?\b/];
+  // only a whole short message counts as yes or no. "ok but make it thursday" is an edit.
+  const whole = (words) => new RegExp("^(please )?(" + words + ")(( and)?[ ,.!]+(" + words + "|please|thanks|thank you|it|that))*[ .!]*$");
+  const YES = whole("yes|yep|yeah|sure|ok|okay|confirm|confirm it|book it|book that|schedule it|order it|looks good|do it|go ahead|that works|sounds good|perfect");
+  const NO = whole("no|nope|cancel|cancel it|never ?mind|not now|stop|forget it|do not book it|don.?t book it|do not order it|don.?t order it");
+  function readEdit(text) {
+    const d = activeDraft;
+    if (!d || !d.open || !d.el.isConnected) return null;
+    let t = text.toLowerCase().trim();
+    if (YES.test(t)) return { act: "confirm" };
+    if (NO.test(t)) return { act: "skip" };
+    t = t.replace(/^(yes|yep|yeah|sure|ok|okay)\b[\s,.!]*(but\s+)?/, "");      // drop a leading "ok," and read the rest
+    if (YES.test(t)) return { act: "confirm" };
+    if (NO.test(t)) return { act: "skip" };
+    const lost = () => (understand(text).unknown ? { act: "help" } : null);      // keep the draft when the message means nothing else
+    if (d.kind === "refill") {
+      const patch = {};
+      if (/\b90\b|three months|3 months/.test(t)) patch.supply = 90;
+      else if (/\b30\b|one month|1 month/.test(t)) patch.supply = 30;
+      if (/mail|deliver|ship/.test(t)) patch.how = "mail";
+      else if (/pick ?up|pharmacy|in person/.test(t)) patch.how = "pickup";
+      return Object.keys(patch).length ? { act: "set", patch } : lost();
+    }
+    if (d.kind !== "visit") return lost();
+    if (/^(and |so |but )?(how much|what (does|will|would|do) (it|this|that|i) (cost|pay|owe))/.test(t) && !/mri|scan|claim|deductible|therap|cover/.test(t)) return { act: "tell", line: d.costLine() };
+    if (/schedul|book|find|cover|claim|id card|deductible|refill|talk to|show my|how much|what is/.test(t)) return null;
+    const s = d.state(), patch = {};
+    if (/\b(no|not|without)( a)? video|in.?person|office|face to face/.test(t)) patch.video = false;
+    else if (/video|virtual|online|telehealth/.test(t)) patch.video = true;
+    // the day the member wants: skip days they ruled out ("thursday instead of friday"), and take the last one named
+    const said = t.replace(/\b(not|instead of|rather than|from)\s+(on\s+)?\w+/g, " ");
+    let at = -1;
+    DAY_RE.forEach((re, i) => { const hit = said.match(re), k = s.days.findIndex((x) => x.getDay() === i); if (hit && k >= 0 && hit.index > at) { at = hit.index; patch.day = k; } });
+    let rest = t;
+    if (/\b(next day|day later|day after|push it)\b/.test(t)) { patch.day = s.day + 1; rest = rest.replace(/day later/, ""); }
+    else if (/\bday (before|earlier)\b|sooner|soonest/.test(t)) { patch.day = s.day - 1; rest = rest.replace(/day earlier/, ""); }
+    else if (/tomorrow/.test(t)) patch.day = 0;
+    else if (/next week/.test(t)) { const k = s.days.findIndex((x, i) => i > 0 && x.getDay() === 1); if (k >= 0) patch.day = k; }
+    const onDay = SLOTS[clamp(patch.day != null ? patch.day : s.day, 0, 4)];
+    const clock = onDay.findIndex((x) => new RegExp("(^|[^\\d])" + x.replace(/ (AM|PM)$/, "") + "\\b").test(rest));   // "make it 10:30"
+    if (clock >= 0) patch.slot = clock;
+    else if (/\bmorning\b|\bearly\b/.test(rest)) patch.slot = 0;
+    else if (/afternoon|evening|after work|end of day/.test(rest)) patch.slot = 2;
+    else if (/\bnoon\b|midday|lunch/.test(rest)) patch.slot = 1;
+    else if (/\bearlier\b/.test(rest)) patch.slot = s.slot - 1;
+    else if (/later/.test(rest)) patch.slot = s.slot + 1;
+    const why = REASONS.find(([re]) => re.test(t));
+    if (why) patch.reason = why[1];
+    return Object.keys(patch).length ? { act: "set", patch } : lost();
+  }
+
+  // a short exchange about the card that is already on screen (no new card)
+  async function editInPlace(text, edit) {
+    const d = activeDraft, turn = d.el.closest(".turn") || flow.lastElementChild;
+    busy = true;
+    try {
+    const q = document.createElement("div");
+    q.className = "ask"; q.style.marginTop = "18px"; q.textContent = text;
+    turn.appendChild(q);
+    face.sent(q);
+    const glide = reduceMotion.matches ? "auto" : "smooth";
+    if (edit.act === "help" || edit.act === "tell") {
+      const line = edit.act === "tell" ? edit.line : d.help;
+      await speak(turn, line, "say--after");
+      turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
+      statusEl.textContent = line;
+    } else if (edit.act === "set") {
+      const changed = d.set(edit.patch);
+      const line = changed.length ? `Done. It is now ${d.describe()}. Confirm when you are ready.` : "It is already set that way. Confirm when you are ready.";
+      const row = d.el.querySelector(".row.flash") || d.el;
+      row.scrollIntoView({ block: "center", behavior: glide });
+      await wait(pace(350));
+      await speak(turn, line, "say--after");
+      turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });     // the reply stops just above the chat bar
+      statusEl.textContent = line;
+      face.lookAtEl(row);
+    } else if (edit.act === "confirm") d.confirm();
+    else d.skip();
+    } finally { busy = false; }
+    return true;
+  }
+
+  // what a card is allowed to do
+  function api(turn) {
+    return {
+      draft: (d) => setDraft(d),
+      ask: (text) => ask(text),
+      say: (text, next) => {
+        speak(turn, text, "say--after");
+        const line = turn.lastElementChild;
+        requestAnimationFrame(() => keepInView(line, line));
+        if (next) setChips(next);
+        statusEl.textContent = text;
+      },
+      celebrate: (el) => face.happy(el),
+      lastTopic: () => lastAsk,
+    };
+  }
+
+  async function ask(raw) {
+    const text = String(raw || "").trim();
+    if (!text || busy) return false;
+    if (window.matchMedia("(pointer: coarse)").matches) input.blur();     // on phones, put the keyboard away so the card has room
+    const edit = isUrgent(text) ? null : readEdit(text);   // safety always wins over an open draft
+    if (edit) return editInPlace(text, edit);
+    busy = true;
+    try {
+    app.classList.add("has-flow");
+    setDraft(null);                                   // a new request: older drafts can still be tapped, but typing no longer changes them
+    flow.querySelectorAll(".mod").forEach((m) => m.classList.add("is-past"));
+
+    const turn = document.createElement("article");
+    turn.className = "turn";
+    const q = document.createElement("div");
+    q.className = "ask";
+    q.textContent = text;
+    turn.appendChild(q);
+    flow.appendChild(turn);
+    showTurn(turn);
+    face.sent(q);
+
+    let spec;
+    try { spec = understand(text); }
+    catch (err) { spec = { say: "Something went wrong on my side. Please try again.", ui: [], next: HOME_CHIPS }; }
+    if (!/talk to|person|wrong/.test(text.toLowerCase())) lastAsk = text;
+
+    await wait(pace(260));
+    face.think(true);
+    await wait(pace(rand(320, 520)));
+    await Promise.race([speak(turn, spec.say), wait(pace(380))]);     // the card starts while the sentence is still arriving
+    let last = null;
+    for (const ui of spec.ui || []) last = (await mount(turn, ui)) || last;
+    face.think(false);
+    if (last) face.lookAtEl(last);
+    setChips(spec.next && spec.next.length ? spec.next : HOME_CHIPS);
+    statusEl.textContent = spec.say + (last ? " A card was added below." : "");
+    // if a chip or button was used with the keyboard, do not leave focus on nothing
+    if (document.activeElement === document.body) {
+      const line = turn.querySelector(".say");
+      if (line) { line.tabIndex = -1; line.focus({ preventScroll: true }); }
+    }
+    } finally { busy = false; face.think(false); }
+    return true;
+  }
+
+  function goHome() {
+    if (busy) return;
+    flow.innerHTML = "";
+    setDraft(null);
+    app.classList.remove("has-flow");
+    page.scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" });
+    setChips(HOME_CHIPS);
+    lastAsk = "";
+    statusEl.textContent = "Back at the start.";
+  }
+
+  /* =========================================================
+     5. THE AVATAR  (eyes that blink, look around and react)
+     ========================================================= */
+
+  const face = (() => {
+    const REST = { x: -0.78, y: 0 };
+    const eyes = { x: REST.x, y: REST.y, vx: 0, vy: 0, tx: REST.x, ty: REST.y, lid: 0, lidTarget: 0, open: 1, openTarget: 1, hop: 0, hopV: 0, glow: 0.85, glowTarget: 0.85 };
+    let mode = "idle";            // idle | follow | typing | thinking
+    let running = false, lastT = 0, H = 68;
+
+    function readSize() { H = parseFloat(getComputedStyle(bar).height) || 68; }
+
+    function render() {
+      const gx = eyes.x, gy = eyes.y, K = 0.2;
+      const w0 = 0.32 * H, gap = 0.085 * H;
+      const wl = w0 * (1 + K * gx), wr = w0 * (1 - K * gx), total = 2 * w0 + gap;
+      const shiftX = (gx < 0 ? 0.13 : 0.085) * H * gx;
+      const shiftY = 0.085 * H * gy + eyes.hop * H;
+      const lx = -total / 2 + wl / 2 + shiftX, rx = total / 2 - wr / 2 + shiftX;
+      const lidScale = Math.max(0.06, (1 - eyes.lid) * eyes.open * (1 - 0.05 * Math.abs(gy)));
+      const tilt = 4 * gx;
+      eyeL.style.transform = `translate(${lx.toFixed(2)}px, ${shiftY.toFixed(2)}px) rotate(${(-tilt * 0.9).toFixed(2)}deg) scale(${(wl / w0).toFixed(3)}, ${lidScale.toFixed(3)})`;
+      eyeR.style.transform = `translate(${rx.toFixed(2)}px, ${shiftY.toFixed(2)}px) rotate(${(-tilt * 1.6).toFixed(2)}deg) scale(${(wr / w0).toFixed(3)}, ${lidScale.toFixed(3)})`;
+      avatarEl.style.setProperty("--glow", eyes.glow.toFixed(3));
+      avatarEl.style.setProperty("--pulse", (1 + (eyes.glow - 0.85) * 0.12).toFixed(4));
+    }
+
+    function step(t) {
+      const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
+      lastT = t;
+      const stiff = mode === "follow" ? 170 : 120, damp = mode === "follow" ? 22 : 17;
+      eyes.vx += ((eyes.tx - eyes.x) * stiff - eyes.vx * damp) * dt;
+      eyes.vy += ((eyes.ty - eyes.y) * stiff - eyes.vy * damp) * dt;
+      eyes.x += eyes.vx * dt; eyes.y += eyes.vy * dt;
+      const lidSpeed = eyes.lidTarget > eyes.lid ? 18 : 11;
+      eyes.lid += (eyes.lidTarget - eyes.lid) * Math.min(1, lidSpeed * dt * 1.6);
+      eyes.open += (eyes.openTarget - eyes.open) * Math.min(1, 9 * dt);
+      eyes.glow += (eyes.glowTarget - eyes.glow) * Math.min(1, 5 * dt);
+      eyes.hopV += (-eyes.hop * 260 - eyes.hopV * 14) * dt;
+      eyes.hop += eyes.hopV * dt;
+      if (mode === "thinking") {
+        const s = t / 1000;
+        eyes.tx = -0.35 + Math.sin(s * 2.4) * 0.42;
+        eyes.ty = -0.72 + Math.sin(s * 4.8) * 0.06;
+        eyes.glowTarget = 0.95 + Math.sin(s * 5) * 0.12;
+      }
+      render();
+      const settled = mode !== "thinking" &&
+        Math.abs(eyes.tx - eyes.x) < 0.002 && Math.abs(eyes.ty - eyes.y) < 0.002 &&
+        Math.abs(eyes.vx) < 0.01 && Math.abs(eyes.vy) < 0.01 &&
+        Math.abs(eyes.lidTarget - eyes.lid) < 0.005 && Math.abs(eyes.openTarget - eyes.open) < 0.005 &&
+        Math.abs(eyes.glowTarget - eyes.glow) < 0.005 && Math.abs(eyes.hop) < 0.0005 && Math.abs(eyes.hopV) < 0.005;
+      if (settled) { running = false; return; }
+      requestAnimationFrame(step);
+    }
+    function wake() { if (running) return; running = true; lastT = performance.now(); requestAnimationFrame(step); }
+
+    function lookAt(x, y) { eyes.tx = clamp(x, -1, 1); eyes.ty = clamp(y, -1, 1); wake(); }
+    function lookAtPoint(px, py) {
+      const r = bar.getBoundingClientRect();
+      const dx = px - (r.right - H * 0.55), dy = py - (r.top + r.height / 2);
+      const nx = dx / (Math.abs(dx) + Math.max(140, window.innerWidth * 0.22));
+      const ny = dy / (Math.abs(dy) + Math.max(110, window.innerHeight * 0.2));
+      lookAt(nx * 1.25, ny * 1.25);
+    }
+    function lookAtEl(el) {
+      if (reduceMotion.matches || !el) return;
+      const r = el.getBoundingClientRect();
+      lookAtPoint(r.left + Math.min(r.width, 300) / 2, r.top + Math.min(r.height, 300) / 2);
+      blink(1, 70);
+    }
+
+    let blinkTimer = 0;
+    function blink(times = 1, hold = 70) {
+      if (eyes.lidTarget === 1) return;
+      let n = times;
+      const once = () => {
+        eyes.lidTarget = 1; wake();
+        setTimeout(() => { eyes.lidTarget = 0; wake(); if (--n > 0) setTimeout(once, 150); }, hold);
+      };
+      once();
+    }
+    function scheduleBlink() {
+      clearTimeout(blinkTimer);
+      blinkTimer = setTimeout(() => {
+        if (!document.hidden) { if (reduceMotion.matches) blink(1, 140); else blink(Math.random() < 0.16 ? 2 : 1, rand(60, 90)); }
+        scheduleBlink();
+      }, reduceMotion.matches ? rand(5000, 8000) : rand(2200, 5600));
+    }
+
+    let wanderTimer = 0;
+    function wander() {
+      clearTimeout(wanderTimer);
+      if (reduceMotion.matches) return;
+      wanderTimer = setTimeout(() => {
+        if (mode === "idle" && !document.hidden) {
+          const roll = Math.random();
+          let x, y;
+          if (roll < 0.3) { x = REST.x + rand(-0.12, 0.12); y = rand(-0.1, 0.1); }
+          else if (roll < 0.52) { x = rand(-0.12, 0.12); y = rand(-0.08, 0.08); }
+          else if (roll < 0.78) { x = rand(-0.9, -0.2); y = rand(-0.85, -0.35); }
+          else if (roll < 0.9) { x = rand(0.35, 0.8); y = rand(-0.4, 0.25); }
+          else { x = rand(-1, -0.5); y = rand(0.2, 0.6); }
+          const far = Math.hypot(x - eyes.x, y - eyes.y) > 0.9;
+          lookAt(x, y);
+          if (far && Math.random() < 0.45) blink(1, 60);
+          if (Math.random() < 0.22) setTimeout(() => { if (mode === "idle") lookAt(x + rand(-0.25, 0.25), y + rand(-0.2, 0.2)); }, rand(260, 520));
+        }
+        wander();
+      }, rand(1100, 3400));
+    }
+
+    function setMode(next) {
+      mode = next;
+      if (next === "idle") { eyes.glowTarget = 0.85; eyes.openTarget = document.activeElement === input ? 1.05 : 1; }
+      wake();
+    }
+
+    let followTimer = 0;
+    function follow(px, py) {
+      if (reduceMotion.matches || mode === "thinking") return;
+      mode = "follow";
+      lookAtPoint(px, py);
+      clearTimeout(followTimer);
+      followTimer = setTimeout(() => {
+        if (mode !== "follow") return;
+        if (document.activeElement === input && input.value) { setMode("typing"); watchCaret(); } else setMode("idle");
+      }, 1500);
+    }
+
+    const measure = document.createElement("canvas").getContext("2d");
+    function watchCaret() {
+      if (reduceMotion.matches) return;
+      const cs = getComputedStyle(input), r = input.getBoundingClientRect();
+      measure.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+      const w = measure.measureText(input.value.slice(0, pos)).width;
+      lookAtPoint(r.left + clamp(w - input.scrollLeft, 0, r.width) + 6, r.top + r.height * 0.62);
+    }
+
+    window.addEventListener("pointermove", (e) => { if (e.pointerType !== "touch") follow(e.clientX, e.clientY); }, { passive: true });
+    window.addEventListener("pointerdown", (e) => follow(e.clientX, e.clientY), { passive: true });
+    window.addEventListener("touchmove", (e) => { const t = e.touches[0]; if (t) follow(t.clientX, t.clientY); }, { passive: true });
+    document.documentElement.addEventListener("pointerleave", () => { if (mode === "follow") setMode("idle"); });
+
+    input.addEventListener("focus", () => { eyes.openTarget = 1.05; if (mode !== "thinking") { setMode(input.value ? "typing" : "idle"); watchCaret(); } });
+    input.addEventListener("blur", () => { eyes.openTarget = 1; if (mode === "typing") setMode("idle"); wake(); });
+    input.addEventListener("input", () => {
+      if (mode === "thinking") return;
+      setMode("typing"); watchCaret();
+      if (!reduceMotion.matches) eyes.hopV -= 0.22;
+      wake();
+    });
+    ["keyup", "click", "select"].forEach((ev) => input.addEventListener(ev, () => { if (mode === "typing") watchCaret(); }));
+
+    const onMotionPref = () => {
+      if (reduceMotion.matches) { clearTimeout(wanderTimer); mode = "idle"; lookAt(REST.x, REST.y); } else wander();
+      scheduleBlink();
+    };
+    if (reduceMotion.addEventListener) reduceMotion.addEventListener("change", onMotionPref);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { scheduleBlink(); wander(); wake(); } });
+
+    return {
+      start() { readSize(); render(); scheduleBlink(); wander(); setTimeout(() => blink(reduceMotion.matches ? 1 : 2, 70), 700); },
+      resize() { readSize(); render(); },
+      blink,
+      lookAtEl,
+      think(on) { if (reduceMotion.matches) return; if (on) setMode("thinking"); else { setMode("idle"); wander(); } },
+      sent(el) {
+        if (reduceMotion.matches) return;
+        eyes.hopV -= 1.5; eyes.openTarget = 0.5; eyes.glowTarget = 1.15; wake();
+        setTimeout(() => { eyes.openTarget = 1.08; wake(); }, 240);
+        const r = el.getBoundingClientRect();
+        setTimeout(() => { if (mode !== "thinking") lookAtPoint(r.left + r.width / 2, r.top + r.height / 2); }, 120);
+      },
+      happy(el) {
+        if (reduceMotion.matches) return;
+        eyes.hopV -= 2.1; eyes.openTarget = 0.42; eyes.glowTarget = 1.25; wake();
+        setTimeout(() => { eyes.openTarget = 1.1; wake(); }, 320);
+        setTimeout(() => { eyes.openTarget = 1; eyes.glowTarget = 0.85; wake(); }, 1100);
+        if (el) { const r = el.getBoundingClientRect(); lookAtPoint(r.left + r.width / 2, r.top + 60); }
+      },
+      hello() {
+        if (reduceMotion.matches) { blink(1, 140); return; }
+        eyes.hopV -= 1.1; eyes.openTarget = 1.12; wake();
+        setTimeout(() => { eyes.openTarget = 1.05; wake(); }, 260);
+        blink(2, 60);
+      },
+    };
+  })();
+
+  /* =========================================================
+     6. CHAT BAR WIRING AND LAYOUT
+     ========================================================= */
+
+  function syncBar() {
+    const hasText = input.value.trim().length > 0;
+    bar.classList.toggle("has-text", hasText);
+    sendBtn.tabIndex = hasText ? 0 : -1;
+    avatarBtn.setAttribute("aria-label", hasText ? "Send" : "Start typing");
+  }
+  async function submit() {
+    const text = input.value.trim();
+    if (!text || busy) return;
+    input.value = "";
+    syncBar();
+    syncChips();
+    ask(text);
+  }
+  input.addEventListener("input", () => { syncBar(); syncChips(); });
+  bar.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+  avatarBtn.addEventListener("click", () => { if (input.value.trim()) submit(); else { input.focus(); face.hello(); } });
+  homeBtn.addEventListener("click", () => { goHome(); face.blink(1, 60); });
+
+  // Page Up, Page Down and the arrow keys scroll the conversation, even while the text box has focus
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") root.classList.add("keys");
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.target !== input && e.target !== document.body) return;
+    const arrows = e.target !== input || !input.value;
+    const dy = { PageDown: 0.8, PageUp: -0.8, ArrowDown: arrows ? 0.15 : 0, ArrowUp: arrows ? -0.15 : 0 }[e.key];
+    if (!dy) return;
+    e.preventDefault();
+    page.scrollBy({ top: dy * page.clientHeight, behavior: e.repeat || reduceMotion.matches ? "auto" : "smooth" });
+  });
+  window.addEventListener("pointerdown", () => root.classList.remove("keys"));
+
+  // keep the bar above the on-screen keyboard (needed on iOS)
+  const vv = window.visualViewport;
+  function syncViewport() {
+    let kb = 0;
+    if (vv && vv.scale < 1.01) kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);   // ignore pinch zoom
+    if (kb < 60) kb = 0;
+    root.style.setProperty("--kb", kb + "px");
+    root.classList.toggle("kb-open", kb > 0);
+    if (kb > 0) window.scrollTo(0, 0);
+    sizeLastTurn();
+    // keep the field being edited inside a card above the keyboard
+    const a = document.activeElement;
+    if (kb > 0 && a && a !== page && page.contains(a)) a.scrollIntoView({ block: "center" });
+  }
+  if (vv) { vv.addEventListener("resize", syncViewport); vv.addEventListener("scroll", syncViewport); }
+  function onResize() { face.resize(); syncBar(); syncViewport(); }
+  if (window.ResizeObserver) new ResizeObserver(sizeLastTurn).observe(dock);
+  window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", onResize);
+
+  /* ---- start ---- */
+  // the app manifest only works from a web address, so skip it when this is opened as a plain file
+  if (location.protocol.indexOf("http") === 0) {
+    const link = document.createElement("link");
+    link.rel = "manifest"; link.href = "manifest.webmanifest";
+    document.head.appendChild(link);
+  }
+  const now = new Date();
+  $("#today").textContent = fmt(now, { weekday: "long", month: "long", day: "numeric" });
+  const hour = now.getHours();
+  $("#greetingLine").textContent = `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${MEMBER.first}.`;
+
+  const today = MODULES.today({}, api(null));
+  stagger(today);
+  today.classList.add("is-built");
+  $("#nudge").appendChild(today);
+
+  setChips(HOME_CHIPS);
+  onResize();
+  face.start();
+
+  // small hook so this can be wired to a real model later
+  window.MemberAssistant = { ask, understand, MODULES };
+})();
+</script>
+</body>
+</html>

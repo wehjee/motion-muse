@@ -46,7 +46,7 @@
     --page: #ffffff;
     --ink: #101311;
     --ink-2: #5b625d;
-    --ink-3: #8a908b;
+    --ink-3: #6b716c;
     --wash: #f4f5f2;
     --wash-2: #eceee9;
     --line: rgba(16, 19, 17, 0.08);
@@ -163,7 +163,7 @@
     text-wrap: balance;
   }
   .hello__title span { display: block; }
-  .hello__sub { color: var(--ink-3); }
+  .hello__sub { color: #8a908b; }
   .hello__nudge { margin-top: clamp(22px, 4.5vh, 40px); }
 
   /* ---------- conversation ---------- */
@@ -200,6 +200,7 @@
   }
   .say .w { display: inline-block; animation: word 0.5s var(--ease) both; animation-delay: calc(var(--i) * 34ms); }
   .say--after { margin: 18px 0 0; }
+  .say { outline: none; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @keyframes word { from { opacity: 0; transform: translateY(5px); filter: blur(5px); } to { opacity: 1; transform: none; filter: blur(0); } }
@@ -268,7 +269,8 @@
   @keyframes part-in { from { opacity: 0; transform: translateY(8px); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
 
   .mod.is-muted { box-shadow: inset 0 0 0 1px var(--line); }
-  .mod.is-muted .mod__body { opacity: 0.55; }
+  .mod.is-muted .opts, .mod.is-muted .inline-input { opacity: 0.55; }     /* only the switched off controls fade, the words stay readable */
+  .mod.is-muted .done__check { background: var(--wash); color: var(--ink-2); }
 
   /* rows inside a card */
   .row {
@@ -280,13 +282,14 @@
     border-top: 1px solid var(--line);
   }
   .row__label { font-size: 13px; color: var(--ink-3); }
-  .row__val { min-width: 0; font-size: 15.5px; }
+  .row__val { min-width: 0; font-size: 15.5px; overflow-wrap: anywhere; }
   .row__val b { font-weight: 600; }
   .note { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
-  .row.flash { animation: flash 1.1s ease; border-radius: 10px; }
+  /* a row that was just changed by typing glows green for a moment */
+  .mod.is-built .row.flash { animation: part-in 0.5s var(--ease) both, flash 1.1s ease; }
   @keyframes flash {
-    0%, 35% { background: var(--green-wash); box-shadow: 0 0 0 6px var(--green-wash); }
-    100% { background: transparent; box-shadow: 0 0 0 6px transparent; }
+    0%, 35% { background: var(--green-wash); box-shadow: 0 0 0 6px var(--green-wash); border-radius: 10px; }
+    100% { background: transparent; box-shadow: 0 0 0 6px transparent; border-radius: 10px; }
   }
   .money { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
   .ok { color: var(--green-ink); font-style: normal; font-weight: 600; }
@@ -337,7 +340,7 @@
   .opts--days b { font-size: 17px; font-weight: 600; }
   .opts--seg { flex-wrap: nowrap; padding: 3px; border-radius: 999px; background: var(--wash); gap: 0; width: fit-content; max-width: 100%; }
   .opts--seg span { background: transparent; min-height: 38px; }
-  .opts--seg input:checked + span { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(16, 19, 17, 0.14), inset 0 0 0 1px var(--line); }
+  .opts--seg input:checked + span { background: var(--ink); color: #fff; }
 
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -479,7 +482,8 @@
   @media (hover: hover) { button.item:hover em { background: var(--wash-2); } }
 
   /* urgent */
-  .alert { padding: 14px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+  .alert { display: block; text-decoration: none; padding: 14px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+  a.choice { text-decoration: none; color: inherit; }
   .alert span { display: block; font-weight: 400; font-size: 14px; margin-top: 2px; }
   .choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
   .choice b { display: block; font-weight: 600; font-size: 15.5px; }
@@ -539,6 +543,7 @@
     transition: background 0.18s ease, transform 0.18s var(--ease);
   }
   .chip:last-child { margin-right: 24px; }
+  .chip:focus-visible { outline-offset: -2px; }
   .chip:active { transform: scale(0.95); }
   @media (hover: hover) { .chip:hover { background: rgba(244, 245, 242, 0.92); } }
   @media (pointer: coarse) { .chip { min-height: 44px; } .chips { min-height: 46px; } }
@@ -613,7 +618,7 @@
     text-overflow: ellipsis;
     -webkit-appearance: none; appearance: none;
   }
-  .field input::placeholder { color: rgba(16, 19, 17, 0.44); opacity: 1; }
+  .field input::placeholder { color: rgba(16, 19, 17, 0.62); opacity: 1; }
 
   .send {
     flex: none; position: relative;
@@ -628,6 +633,7 @@
   .send svg { width: 18px; height: 18px; display: block; }
   .has-text .send { opacity: 1; transform: none; pointer-events: auto; }
   .has-text .send:active { transform: scale(0.9); }
+  .bar:not(.has-text) .send { width: 0; margin-left: 0; }          /* no empty slot while there is nothing to send */
 
   .avatar { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
   .avatar__halo {
@@ -676,7 +682,15 @@
     border-radius: 0 calc(var(--h) * 0.34) calc(var(--h) * 0.34) 0;
     z-index: 4;
   }
-  .bar .avatar-btn:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+  .bar .avatar-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+  /* a clear ring on the bar when the text box is reached with the keyboard */
+  .keys .bar:has(#message:focus) {
+    box-shadow:
+      0 20px 44px -20px rgba(16, 19, 17, 0.3),
+      0 3px 10px rgba(16, 19, 17, 0.07),
+      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
+      0 0 0 2px var(--green);
+  }
 
   /* ---------- sizes ---------- */
 
@@ -702,11 +716,11 @@
   @media (max-height: 460px) {
     :root { --h: 52px; }
     .hello { padding-top: 34px; }
-    .chips { display: none; }
+    .dock { gap: 6px; padding-top: 10px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ask, .say .w, .mod, .mod.is-built .part, .chip, .done__check path, .row.flash { animation: none; }
+    .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
     .meter i, .btn, .opt span, .chip, .send { transition-duration: 0.01s; }
@@ -814,7 +828,7 @@
   const initials = (name) => name.replace(/^Dr\.\s+/, "").replace(/,.*$/, "").split(/\s+/).map((p) => p[0]).slice(0, 2).join("");
 
   const REASONS = [
-    [/knee/, "Knee pain"], [/shoulder/, "Shoulder pain"], [/ankle/, "Ankle pain"], [/back/, "Back pain"],
+    [/knee/, "Knee pain"], [/shoulder/, "Shoulder pain"], [/ankle/, "Ankle pain"], [/\bback (pain|hurts|ache)|\bmy back\b|backache/, "Back pain"],
     [/rash/, "Skin rash"], [/acne/, "Acne"], [/mole/, "Mole check"],
     [/check-?up|annual|yearly|physical(?! therap)/, "Yearly checkup"],
     [/vaccine|flu shot/, "Vaccine"], [/cold|flu|cough|sore throat|fever/, "Cold or flu"],
@@ -823,14 +837,17 @@
 
   const BENEFITS = [
     { re: /physical therap|physio|\bpt\b/, name: "Physical therapy", covered: true, pay: "$40 per visit", note: "This is your copay. You do not need to meet your deductible first.", limit: ["Visits used this year", 4, 30], approval: "Not needed for your first 12 visits", spec: "pt" },
-    { re: /\bmri\b|\bct\b|scan|imaging|x-?ray/, name: "MRI and CT scans", covered: true, pay: "20% after your deductible", note: "Most members pay about $180 to $320 at an in-network imaging center.", approval: "Needed first. Your doctor sends the request.", warn: true, next: "What will an MRI cost?" },
-    { re: /therap|counsel|mental|psych/, name: "Mental health visits", covered: true, pay: "$25 per visit", note: "Same price in person. Video visits are $10.", approval: "Not needed", spec: "therapy" },
-    { re: /urgent care/, name: "Urgent care", covered: true, pay: "$75 per visit", note: "An emergency room visit is $250, so urgent care can save you money when it is not an emergency.", approval: "Not needed" },
-    { re: /emergency room|\ber\b|ambulance/, name: "Emergency room", covered: true, pay: "$250 per visit", note: "Covered at any hospital, in network or not. The copay is dropped if you are admitted.", approval: "Never needed in an emergency" },
-    { re: /video|telehealth|virtual/, name: "Video visits", covered: true, pay: "$10 per visit", note: "Available every day, usually within 15 minutes.", approval: "Not needed" },
-    { re: /dermatolog|skin/, name: "Dermatology visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "derm" },
+    { re: /\bmri\b|\bct\b|scan|imaging|x-?ray/, name: "MRI and CT scans", covered: true, pay: "20% after your deductible", note: "You still have $650 left on your deductible, and you pay that first. Ask me what an MRI will cost you.", approval: "Needed first. Your doctor sends the request.", warn: true, next: "What will an MRI cost?" },
     { re: /acupunct/, name: "Acupuncture", covered: false, pay: "Full price", note: "Your plan does not pay for this. You can use HSA or FSA money for it." },
     { re: /massage/, name: "Massage therapy", covered: false, pay: "Full price", note: "Your plan does not pay for this unless it is part of physical therapy." },
+    { re: /mental|counsel|psych|therapist|(^|is |for |my |does )therapy/, name: "Mental health visits", covered: true, pay: "$25 per visit", note: "Same price in person. Video visits are $10.", approval: "Not needed", spec: "therapy" },
+    { re: /urgent care/, name: "Urgent care", covered: true, pay: "$75 per visit", note: "An emergency room visit is $250, so urgent care can save you money when it is not an emergency.", approval: "Not needed" },
+    { re: /emergency room|\ber\b/, name: "Emergency room", covered: true, pay: "$250 per visit", note: "Covered at any hospital, in network or not. The copay is dropped if you are admitted.", approval: "Never needed in an emergency" },
+    { re: /video|telehealth|virtual/, name: "Video visits", covered: true, pay: "$10 per visit", note: "Available every day, usually within 15 minutes.", approval: "Not needed" },
+    { re: /dermatolog|skin/, name: "Dermatology visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "derm" },
+    { re: /primary care|pcp|family doctor/, name: "Primary care visits", covered: true, pay: "$25 per visit", note: "Yearly checkups are $0. Video visits are $10.", approval: "Not needed", spec: "primary" },
+    { re: /orthop|bone and joint/, name: "Orthopedic visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "ortho" },
+    { re: /eye care|eye exam|eye doctor|vision/, name: "Eye care visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "eye" },
   ];
 
   // prices the plan has agreed to, used for cost estimates
@@ -863,33 +880,63 @@
   function findSpecialty(t) { return SPECIALTIES.find((s) => s.re.test(t)) || null; }
   function findDoctor(t) {
     for (const key of Object.keys(DOCS)) for (const d of docsFor(key)) {
-      const last = d.name.replace(/^Dr\.\s+/, "").replace(/,.*$/, "").split(" ").pop().toLowerCase();
-      if (t.includes(last)) return d;
+      const [first, last] = d.name.replace(/^Dr\.\s+/, "").replace(/,.*$/, "").toLowerCase().split(" ");
+      if (new RegExp("\\b(dr\\.?|doctor|with|" + first + ") " + last + "\\b").test(t)) return d;
     }
     return null;
   }
+
+  // Safety words. These are checked first and always win, even when a draft card is open.
+  // A real product needs much more than a word list here. This is only a stand-in.
+  const CRISIS = /suicid|kill(ing)? myself|hurt(ing)? myself|self.?harm|end(ing)? (my life|it all)|want to die|(don.?t|do not) want to (live|be here|be alive)|take my (own )?life/;
+  const SYMPTOMS = /chest (pain|hurt|tight|pressure|is tight)|heart attack|(can.?t|cannot|can not|hard to|not|stopped) breath|trouble breathing|short of breath|stroke|overdose|(took|taken|had|swallowed) too (many|much)|too many pills|swallowed|poison(?! ivy| oak)|bleeding|unconscious|passed out|seizure|choking|severe/;
+  function urgency(text) {
+    const t = String(text).toLowerCase();
+    if (CRISIS.test(t)) return "crisis";
+    if (SYMPTOMS.test(t)) return "emergency";
+    // "is the emergency room covered?" is a money question, not an emergency
+    const aboutTheER = /emergency room|\ber\b/.test(t) && /cover|cost|how much|copay|price|pay/.test(t);
+    if (/emergency|\b911\b/.test(t) && !aboutTheER) return "emergency";
+    return null;
+  }
+  const isUrgent = (text) => urgency(text) !== null;
 
   function understand(text) {
     const t = text.toLowerCase().trim();
 
     // safety first
-    if (/suicid|kill myself|hurt myself|self.?harm|end my life/.test(t))
+    const urgent = urgency(t);
+    if (urgent === "crisis")
       return { say: "I am really glad you told me. You do not have to handle this alone. You can call or text 988 right now and talk to someone.", ui: [{ type: "urgent", props: { crisis: true } }], next: ["Talk to a person"] };
-    if (/chest pain|can.?t breathe|trouble breathing|stroke|overdose|bleeding|unconscious|emergency|911|severe/.test(t))
-      return { say: "If this could be an emergency, call 911 now. If it can wait a little, here are fast ways to get care.", ui: [{ type: "urgent", props: {} }], next: ["Find urgent care near me", "Talk to a person"] };
+    if (urgent === "emergency")
+      return { say: "If this could be an emergency, call 911 now. If it can wait a little, here are fast ways to get care.", ui: [{ type: "urgent", props: { poison: /swallow|poison|too (many|much)|overdose/.test(t) } }], next: ["Find urgent care near me", "Talk to a person"] };
 
     if (/id card|member id|insurance card|my card|member number/.test(t))
       return { say: "Here is your member ID card. You can show this at any visit.", ui: [{ type: "idcard", props: {} }], next: ["Schedule a visit", "My deductible"] };
 
+    if (/what is a deductible|what does deductible mean/.test(t))
+      return { say: "A deductible is the amount you pay for care each year before your plan starts to share the cost. Checkups and other preventive care are $0 even before you reach it.", ui: [], next: ["My deductible", "Is physical therapy covered?"] };
     if (/deductible|out.of.pocket|how much have i (paid|spent|met)|my spending/.test(t)) {
       const left = USAGE.deductible[1] - USAGE.deductible[0];
       return { say: `You have paid ${money(USAGE.deductible[0])} of your ${money(USAGE.deductible[1])} deductible. After ${money(left)} more, your plan starts paying most of the bill.`, ui: [{ type: "usage", props: {} }], next: ["What is a deductible?", "Where is my claim?"] };
     }
-    if (/what is a deductible|what does deductible mean/.test(t))
-      return { say: "A deductible is the amount you pay for care each year before your plan starts to share the cost. Checkups and other preventive care are free even before you reach it.", ui: [], next: ["My deductible", "Is physical therapy covered?"] };
+
+    if (/prior auth|pre.?auth|authoriz|approval status|approved|my approval|waiting (for|on) approval/.test(t))
+      return { say: "Your MRI request is with your plan now. You do not need to do anything. A decision is due within a week.", ui: [{ type: "approval", props: {} }], next: ["What will an MRI cost?", "Talk to a person"] };
+
+    if (/how much|cost|price|estimate|what will i (pay|owe)/.test(t)) {
+      const e = ESTIMATES.find((x) => x.re.test(t));
+      if (e) {
+        const low = Math.min(...e.places.map((pl) => yourShare(pl.price).you));
+        return { say: `An MRI would cost you about ${money(low)} at the lower priced place near you. Here is how I got that number.`, ui: [{ type: "cost", props: { estimate: e } }], next: ["Is my MRI approved?", "My deductible", "Find a bone and joint doctor"] };
+      }
+    }
+
+    if (/looks wrong|is wrong|complain|appeal|dispute/.test(t))
+      return { say: "Sure. I can have a person call you. I will pass along what we talked about so you do not have to repeat it.", ui: [{ type: "handoff", props: { topic: "A problem with a claim" } }], next: ["Where is my claim?", "Show my ID card"] };
 
     if (/claim|\bbill|\beob\b|charged|\bowe\b/.test(t))
-      return { say: "Your latest claim is finished. Your plan paid its part and you owe $25.", ui: [{ type: "claim", props: {} }], next: ["Something looks wrong", "My deductible"] };
+      return claimPaid ? { say: "Your latest claim is paid in full. You do not owe anything.", ui: [{ type: "claim", props: {} }], next: ["My deductible", "Show my ID card"] } : { say: "Your latest claim is finished. Your plan paid its part and you owe $25.", ui: [{ type: "claim", props: {} }], next: ["Something looks wrong", "My deductible"] };
 
     if (/refill|prescription|medication|medicine|\brx\b|pharmacy/.test(t))
       return { say: "You have one refill ready. Check the details and confirm, and I will send it to the pharmacy.", ui: [{ type: "refill", props: {} }], next: ["Show my ID card", "My deductible"] };
@@ -903,7 +950,7 @@
       const reason = found ? found[1] : spec.reason;
       const video = /video|virtual|online|telehealth/.test(t);
       const days = upcomingWeekdays(5);
-      let day = 0, dayAsked = "";
+      let day = doctor ? doctor.i : 0, dayAsked = "";
       const names = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
       names.forEach((n, i) => { if (t.includes(n)) { const k = days.findIndex((d) => d.getDay() === i); if (k >= 0) { day = k; dayAsked = n[0].toUpperCase() + n.slice(1); } } });
       if (/next week/.test(t)) { const k = days.findIndex((d, i) => i > 0 && d.getDay() === 1); if (k >= 0) day = k; }
@@ -923,21 +970,10 @@
       return { say: `I found 3 ${spec.noun} near you. All of them are in your network, so you pay the lower price.`, ui: [{ type: "providers", props: { spec: spec.key } }], next: [`Is ${spec.label.toLowerCase()} covered?`, "Show my ID card"] };
     }
 
-    if (/prior auth|pre.?auth|authoriz|approval status|approved|my approval|waiting (for|on) approval/.test(t))
-      return { say: "Your MRI request is with your plan now. You do not need to do anything. A decision is due within a week.", ui: [{ type: "approval", props: {} }], next: ["What will an MRI cost?", "Talk to a person"] };
-
-    if (/how much|cost|price|estimate|what will i (pay|owe)/.test(t)) {
-      const e = ESTIMATES.find((x) => x.re.test(t));
-      if (e) {
-        const low = Math.min(...e.places.map((pl) => yourShare(pl.price).you));
-        return { say: `An MRI would cost you about ${money(low)} at the lower priced place near you. Here is how I got that number.`, ui: [{ type: "cost", props: { estimate: e } }], next: ["Is my MRI approved?", "My deductible", "Find a bone and joint doctor"] };
-      }
-    }
-
     if (/cover|pay for|how much|cost|price|do i need (a referral|approval)|included/.test(t)) {
       const b = BENEFITS.find((x) => x.re.test(t));
       if (b) {
-        const say = b.covered ? `Yes, ${b.name.toLowerCase()} ${/s$/.test(b.name) ? "are" : "is"} covered. Here is what you would pay.` : `${b.name} is not covered by your plan, so you would pay the full price.`;
+        const say = b.covered ? `Yes, ${b.name.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())} ${/s$/.test(b.name) ? "are" : "is"} covered. Here is what you would pay.` : `${b.name} is not covered by your plan, so you would pay the full price.`;
         const next = [];
         if (b.next) next.push(b.next);
         next.push("Schedule a visit", "Talk to a person");
@@ -954,7 +990,7 @@
     if (/thank/.test(t))
       return { say: "Any time. I am here if you need anything else.", ui: [], next: HOME_CHIPS };
 
-    return { say: "I am not sure about that one yet. This is a prototype, so I only know a few things. Try one of these.", ui: [], next: HOME_CHIPS };
+    return { unknown: true, say: "I am not sure about that one yet. This is a prototype, so I only know a few things. Try one of these.", ui: [], next: HOME_CHIPS };
   }
 
   /* =========================================================
@@ -1066,7 +1102,8 @@
     reasonEl.value = p.reason;
     const timesEl = $("[data-times]", m.el), whereEl = $("[data-where]", m.el), costEl = $("[data-cost]", m.el), noteEl = $("[data-costnote]", m.el), confirmBtn = $("[data-confirm]", m.el);
 
-    const cost = () => spec.pay[st.video ? 1 : 0];
+    const free = () => doc.spec === "primary" && /check-?up|annual|yearly|vaccine|flu shot/i.test(reasonEl.value);
+    const cost = () => (free() ? 0 : spec.pay[st.video ? 1 : 0]);
     const when = () => `${fmt(days[st.day], { weekday: "short", month: "short", day: "numeric" })} at ${SLOTS[st.day][st.slot]}`;
     function drawTimes() {
       timesEl.innerHTML = SLOTS[st.day].map((s, i) =>
@@ -1077,7 +1114,7 @@
         ? `<b>Video visit</b><span class="note">We will text you a link 10 minutes before.</span>`
         : `<b>${esc(doc.place)}</b><span class="note">${esc(doc.addr)} · ${esc(doc.dist)} away</span>`;
       costEl.textContent = money(cost());
-      noteEl.textContent = "This is your copay. Nothing else is due for this visit.";
+      noteEl.textContent = free() ? "Yearly checkups and vaccines are $0 with your plan." : "This is your copay for the visit. Tests or treatment can cost extra.";
       confirmBtn.textContent = `Confirm ${fmt(days[st.day], { weekday: "short" })} ${SLOTS[st.day][st.slot]}`;
     }
     drawTimes(); draw();
@@ -1090,6 +1127,7 @@
       draw();
     });
     reasonEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); reasonEl.blur(); } });
+    reasonEl.addEventListener("input", draw);
 
     // lets the chat bar change this same card ("make it Thursday", "video instead")
     const check = (name, value) => { const r = m.el.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
@@ -1110,6 +1148,8 @@
         });
         return changed;
       },
+      help: "I can change the day, the time of day, or switch to video. Try Thursday afternoon. Say confirm when it looks right.",
+      costLine: () => `This visit would cost you ${money(cost())}. ${free() ? "Yearly checkups and vaccines are $0 with your plan." : "That is your copay."} Say confirm when it looks right.`,
       confirm: () => confirmBtn.click(),
       skip: () => $("[data-skip]", m.el).click(),
     };
@@ -1152,10 +1192,11 @@
           const d = $(".done b", m.el); if (d) d.textContent = "Visit cancelled";
         });
         landFocus(m.el);
+        if (todayRow) todayRow.undo();
         api.say("Okay, I cancelled that visit. You will not be charged.", ["Schedule a visit", "Find another doctor"]);
       });
       api.celebrate(m.el);
-      todayDone(/checkup/i.test(reason) ? "checkup" : "", "Visit booked", `${doc.name} · ${whenText}`);
+      const todayRow = todayDone(/checkup/i.test(reason) ? "checkup" : "", "Visit booked", `${doc.name} · ${whenText}`);
       api.say(`Done. You are booked for ${whenText}. I will remind you the day before.`, ["Show my ID card", "My deductible"]);
     });
 
@@ -1167,6 +1208,7 @@
         m.el.querySelectorAll("input").forEach((i) => (i.disabled = true));
         m.actions.innerHTML = "";
       });
+      landFocus(m.el);
       api.say("No problem. Nothing was booked.", HOME_CHIPS);
     });
     return m.el;
@@ -1272,6 +1314,7 @@
   };
 
   /* ---- claim status ---- */
+  let claimPaid = false;
   MODULES.claim = (p, api) => {
     const m = shell("Claim", ICON.doc, '<span class="pill pill--ok">Paid</span>');
     m.body.innerHTML =
@@ -1284,15 +1327,19 @@
          <div><span>Doctor billed</span><span>$240.00</span></div>
          <div><span>Plan discount</span><span>− $95.00</span></div>
          <div><span>Plan paid</span><span>− $120.00</span></div>
-         <div class="sum__total"><span>You owe</span><span>$25.00</span></div></div>
+         <div class="sum__total"><span>${claimPaid ? "You paid" : "You owe"}</span><span>$25.00</span></div></div>
        <p class="fine part">Your bill from the doctor should say $25. If it says more, tell me and I will help.</p>`;
+    const paid = `<div class="done part" style="padding:6px 0 0"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>Paid $25.00</b><span>Card ending 4417 · receipt sent by email</span></div></div>`;
+    if (claimPaid) { m.actions.innerHTML = paid; return m.el; }
     m.actions.innerHTML =
       `<button class="btn btn--primary part" type="button" data-pay>Pay $25</button>
        <button class="btn btn--text part" type="button" data-wrong>Something looks wrong</button>`;
     $("[data-pay]", m.el).addEventListener("click", (e) => {
       const btn = e.currentTarget;
       if (btn.dataset.armed) {
-        morph(m.el, () => { m.actions.innerHTML = `<div class="done part" style="padding:6px 0 0"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>Paid $25.00</b><span>Card ending 4417 · receipt sent by email</span></div></div>`; });
+        claimPaid = true;
+        morph(m.el, () => { m.actions.innerHTML = paid; });
+        landFocus(m.el);
         api.celebrate(m.el);
         todayDone("claim", "Claim paid in full", "Office visit on Oct 28");
         api.say("Thanks. That claim is all done.", ["My deductible", "Show my ID card"]);
@@ -1302,7 +1349,7 @@
         statusEl.textContent = "Press again to confirm the payment of 25 dollars.";
       }
     });
-    $("[data-wrong]", m.el).addEventListener("click", () => api.ask("Something looks wrong with my claim"));
+    $("[data-wrong]", m.el).addEventListener("click", () => api.ask("Something looks wrong"));
     return m.el;
   };
 
@@ -1352,7 +1399,7 @@
     m.body.innerHTML =
       g("Deductible", USAGE.deductible, `${money(USAGE.deductible[1] - USAGE.deductible[0])} to go. Then your plan pays 80% for most care.`) +
       g("Most you could pay this year", USAGE.oop, `After ${money(USAGE.oop[1])}, your plan pays 100% of covered care.`) +
-      `<p class="fine part">Both start over on January 1. Checkups and vaccines are $0 no matter what.</p>`;
+      `<p class="fine part">Both start over on January 1. Checkups and vaccines are $0 when you stay in network.</p>`;
     return m.el;
   };
 
@@ -1362,16 +1409,17 @@
     const n = m.id, st = { supply: 30, how: "pickup" };
     m.body.innerHTML =
       `<div class="who part"><span class="who__pic" aria-hidden="true">Rx</span><span class="who__txt"><b>Atorvastatin 20 mg</b><span>1 tablet a day · 2 refills left</span></span></div>
-       <div class="row part"><span class="row__label" id="${n}-sl">Supply</span>
+       <div class="row part" data-row="supply"><span class="row__label" id="${n}-sl">Supply</span>
          <div class="opts opts--seg" role="radiogroup" aria-labelledby="${n}-sl">
            <label class="opt"><input type="radio" name="${n}-supply" value="30" checked /><span>30 days</span></label>
            <label class="opt"><input type="radio" name="${n}-supply" value="90" /><span>90 days</span></label></div></div>
-       <div class="row row--stack part"><span class="row__label" id="${n}-hl">Get it</span>
+       <div class="row row--stack part" data-row="how"><span class="row__label" id="${n}-hl">Get it</span>
          <div class="opts" role="radiogroup" aria-labelledby="${n}-hl">
            <label class="opt"><input type="radio" name="${n}-how" value="pickup" checked /><span>Pick up</span></label>
            <label class="opt"><input type="radio" name="${n}-how" value="mail" /><span>By mail</span></label></div></div>
-       <div class="row part"><span class="row__label">Where</span><div class="row__val" data-where></div></div>
-       <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b class="money" data-cost></b><span class="note" data-note></span></div></div>`;
+       <div class="row part" data-row="where"><span class="row__label">Where</span><div class="row__val" data-where></div></div>
+       <div class="row part" data-row="cost"><span class="row__label">You pay</span><div class="row__val"><b class="money" data-cost></b><span class="note" data-note></span></div></div>
+       <p class="fine part">Tap to change it, or just tell me. Nothing is ordered until you confirm.</p>`;
     m.actions.innerHTML = `<button class="btn btn--primary part" type="button" data-confirm></button><button class="btn btn--text part" type="button" data-skip>Not now</button>`;
     const whereEl = $("[data-where]", m.el), costEl = $("[data-cost]", m.el), noteEl = $("[data-note]", m.el), confirmBtn = $("[data-confirm]", m.el);
     const cost = () => (st.supply === 90 ? 20 : 10);
@@ -1389,7 +1437,22 @@
       if (e.target.name === `${n}-how`) st.how = e.target.value;
       draw();
     });
-    const draft = { kind: "refill", open: true, el: m.el, confirm: () => confirmBtn.click(), skip: () => $("[data-skip]", m.el).click() };
+    const draft = {
+      kind: "refill", open: true, el: m.el,
+      describe: () => `a ${st.supply} day supply, ${st.how === "pickup" ? "for pick up" : "sent by mail"}, for ${money(cost())}`,
+      set(patch) {
+        const changed = [];
+        const check = (name, value) => { const r = m.el.querySelector(`input[name="${name}"][value="${value}"]`); if (r) r.checked = true; };
+        if (patch.supply && patch.supply !== st.supply) { st.supply = patch.supply; check(`${n}-supply`, st.supply); changed.push("supply", "cost"); }
+        if (patch.how && patch.how !== st.how) { st.how = patch.how; check(`${n}-how`, st.how); changed.push("how", "where"); }
+        draw();
+        changed.forEach((name) => { const row = m.el.querySelector(`[data-row="${name}"]`); if (row) { row.classList.remove("flash"); row.offsetWidth; row.classList.add("flash"); } });
+        return changed;
+      },
+      help: "I can make it a 90 day supply or send it by mail. Say confirm when it looks right.",
+      confirm: () => confirmBtn.click(),
+      skip: () => $("[data-skip]", m.el).click(),
+    };
     api.draft(draft);
     confirmBtn.addEventListener("click", () => {
       draft.open = false; api.draft(null);
@@ -1402,12 +1465,15 @@
            <div class="row part"><span class="row__label">You pay</span><div class="row__val"><b>${money(cost())}</b> ${st.how === "pickup" ? "at pickup" : "charged when it ships"}</div></div>`;
         m.actions.innerHTML = "";
       });
+      landFocus(m.el);
       api.celebrate(m.el);
       todayDone("refill", "Refill ordered", line);
       api.say("Done. I will let you know when it is ready.", ["Show my ID card", "My deductible"]);
     });
     $("[data-skip]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
       morph(m.el, () => { m.el.classList.add("is-muted"); m.pill().textContent = "Not ordered"; m.el.querySelectorAll("input").forEach((i) => (i.disabled = true)); m.actions.innerHTML = ""; });
+      landFocus(m.el);
       api.say("No problem. Nothing was ordered.", HOME_CHIPS);
     });
     return m.el;
@@ -1426,38 +1492,51 @@
        <div class="row part"><span class="row__label">I will share</span><div class="row__val">${esc(topic)}<span class="note">So you do not have to explain it again.</span></div></div>`;
     m.actions.innerHTML = `<button class="btn btn--primary part" type="button" data-confirm>Request a call</button><button class="btn btn--text part" type="button" data-skip>Not now</button>`;
     m.el.addEventListener("change", (e) => { if (e.target.name === `${n}-when`) st.when = e.target.value; });
+    const draft = {
+      kind: "call", open: true, el: m.el,
+      help: "Pick a time on the card, then say confirm and I will request the call.",
+      confirm: () => $("[data-confirm]", m.el).click(),
+      skip: () => $("[data-skip]", m.el).click(),
+    };
+    api.draft(draft);
     $("[data-confirm]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
       morph(m.el, () => {
         m.pill().textContent = "Requested"; m.pill().className = "pill pill--ok";
         m.body.innerHTML = `<div class="done part" style="padding-bottom:4px"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>A person will call you</b><span>${esc(st.when)} at (555) 010-0142</span></div></div>`;
         m.actions.innerHTML = "";
       });
+      landFocus(m.el);
       api.celebrate(m.el);
       api.say("All set. They will already know what you need.", HOME_CHIPS);
     });
     $("[data-skip]", m.el).addEventListener("click", () => {
+      draft.open = false; api.draft(null);
       morph(m.el, () => { m.el.classList.add("is-muted"); m.pill().textContent = "Not sent"; m.el.querySelectorAll("input").forEach((i) => (i.disabled = true)); m.actions.innerHTML = ""; });
+      landFocus(m.el);
       api.say("Okay. I am here if you change your mind.", HOME_CHIPS);
     });
     return m.el;
   };
 
   /* ---- care right now ---- */
-  MODULES.urgent = (p, api) => {
+  MODULES.urgent = (p) => {
     const m = shell(p.calm ? "Care today" : "Get help now", ICON.alert);
+    // the red banner is itself the call link, so the way to get help is always on screen
     const top = p.crisis
-      ? `<div class="alert part">Call or text 988<span>The Suicide and Crisis Lifeline. Free, private, open all day and night.</span></div>`
-      : p.calm ? "" : `<div class="alert part">Call 911 for an emergency<span>Chest pain, trouble breathing, signs of a stroke, or heavy bleeding.</span></div>`;
-    m.body.innerHTML = top +
-      `<div class="choice part"><div><b>Nurse line</b><span>Talk to a nurse any time, day or night</span></div><em>$0</em></div>
-       <div class="choice part"><div><b>Video visit now</b><span>About a 10 minute wait</span></div><em>$10</em></div>
-       <div class="choice part"><div><b>Urgent care near you</b><span>Parkside Urgent Care · 1.4 mi · open until 9 PM</span></div><em>$75</em></div>
-       <p class="fine part">I am not a doctor and cannot tell you how serious this is. If you are unsure, call the nurse line.</p>`;
+      ? `<a class="alert part" href="tel:988">Call or text 988<span>The Suicide and Crisis Lifeline. Free, private, open all day and night.</span></a>`
+      : p.calm ? "" : `<a class="alert part" href="tel:911">Call 911 for an emergency<span>Chest pain, trouble breathing, signs of a stroke, or heavy bleeding.</span></a>`;
+    const poison = p.poison ? `<a class="choice part" href="tel:18002221222"><div><b>Poison Control</b><span>1-800-222-1222 · free, any time</span></div><em>Call</em></a>` : "";
+    m.body.innerHTML = top + (p.crisis
+      ? `<p class="fine part">If you are in danger right now, call 911.</p>`
+      : poison +
+        `<div class="choice part"><div><b>Nurse line</b><span>1-800-555-0134 · any time, day or night</span></div><em>$0</em></div>
+         <div class="choice part"><div><b>Video visit now</b><span>About a 10 minute wait</span></div><em>$10</em></div>
+         <div class="choice part"><div><b>Urgent care near you</b><span>Parkside Urgent Care · 1.4 mi · open until 9 PM</span></div><em>$75</em></div>
+         <p class="fine part">I am not a doctor and cannot tell you how serious this is. If you are unsure, call the nurse line.</p>`);
     m.actions.innerHTML = p.crisis
       ? `<a class="btn btn--danger part" href="tel:988">Call 988</a><a class="btn btn--quiet part" href="sms:988">Text 988</a>`
-      : (p.calm ? "" : `<a class="btn btn--danger part" href="tel:911">Call 911</a>`) + `<button class="btn btn--quiet part" type="button" data-nurse>Call the nurse line</button>`;
-    const nurse = $("[data-nurse]", m.el);
-    if (nurse) nurse.addEventListener("click", () => api.ask("Talk to a nurse"));
+      : (p.calm ? "" : `<a class="btn btn--danger part" href="tel:911">Call 911</a>`) + `<a class="btn btn--quiet part" href="tel:18005550134">Call the nurse line</a>`;
     return m.el;
   };
 
@@ -1482,13 +1561,14 @@
   };
   // the Today card fills in as things get done
   function todayDone(key, title, sub) {
-    if (!todayBody) return;
+    if (!todayBody) return null;
     const old = key && todayBody.querySelector(`[data-key="${key}"]`);
-    if (old) old.remove();
+    if (old) old.style.display = "none";
     const d = document.createElement("div");
     d.className = "item is-done";
     d.innerHTML = `<span class="item__dot" aria-hidden="true">${ICON.check}</span><span class="item__txt"><b>${esc(title)}</b><span>${esc(sub)}</span></span>`;
     todayBody.prepend(d);
+    return { undo() { d.remove(); if (old) old.style.display = ""; } };
   }
 
   /* ---- add to calendar (makes a real .ics file) ---- */
@@ -1562,6 +1642,16 @@
     }
     return scored.sort((a, b) => b[0] - a[0]).slice(0, 3).map((x) => x[1]);
   }
+  // chips and the swipe row: a focused item scrolls into view, and a mouse wheel scrolls the chips sideways
+  document.addEventListener("focusin", (e) => {
+    const t = e.target;
+    if (t.closest && t.closest(".chips, .strip") && t.matches(":focus-visible")) t.scrollIntoView({ inline: "center", block: "nearest" });
+  });
+  chipsEl.addEventListener("wheel", (e) => {
+    if (e.deltaX || !e.deltaY || chipsEl.scrollWidth <= chipsEl.clientWidth) return;
+    chipsEl.scrollLeft += e.deltaY; e.preventDefault();
+  }, { passive: false });
+
   function syncChips() {
     const text = input.value.trim();
     if (!text) return drawChips(contextChips);
@@ -1599,6 +1689,7 @@
       if (i < words.length - 1) p.appendChild(document.createTextNode(" "));
     });
     turn.appendChild(p);
+    setTimeout(() => { if (p.isConnected) p.textContent = text; }, reduceMotion.matches ? 0 : words.length * 34 + 600);
     return wait(pace(Math.min(900, words.length * 34 + 200)));
   }
 
@@ -1632,54 +1723,87 @@
       liveDrafts[d.kind] = d;
     }
     activeDraft = d;
-    input.placeholder = d ? "Tell me what to change" : "Ask anything";
+    input.placeholder = d && d.set ? "Tell me what to change" : "Ask anything";
   }
-  const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const DAY_RE = [/\bsun(day)?\b/, /\bmon(day)?\b/, /\btue(s|sday)?\b/, /\bwed(nesday)?\b/, /\bthu(r|rs|rsday)?\b/, /\bfri(day)?\b/, /\bsat(urday)?\b/];
+  // only a whole short message counts as yes or no. "ok but make it thursday" is an edit.
+  const whole = (words) => new RegExp("^(please )?(" + words + ")(( and)?[ ,.!]+(" + words + "|please|thanks|thank you|it|that))*[ .!]*$");
+  const YES = whole("yes|yep|yeah|sure|ok|okay|confirm|confirm it|book it|book that|schedule it|order it|looks good|do it|go ahead|that works|sounds good|perfect");
+  const NO = whole("no|nope|cancel|cancel it|never ?mind|not now|stop|forget it|do not book it|don.?t book it|do not order it|don.?t order it");
   function readEdit(text) {
     const d = activeDraft;
     if (!d || !d.open || !d.el.isConnected) return null;
-    const t = text.toLowerCase().trim();
-    if (/^(yes|yep|yeah|ok|okay|confirm|book it|looks good|do it|go ahead|that works|sounds good|perfect)\b/.test(t)) return { act: "confirm" };
-    if (/^(no\b|nope|cancel|never ?mind|not now|stop|forget it)/.test(t)) return { act: "skip" };
-    if (d.kind !== "visit" || /schedul|book|find|cover|claim|id card|deductible|refill|talk to|show my|how much|what is/.test(t)) return null;
+    let t = text.toLowerCase().trim();
+    if (YES.test(t)) return { act: "confirm" };
+    if (NO.test(t)) return { act: "skip" };
+    t = t.replace(/^(yes|yep|yeah|sure|ok|okay)\b[\s,.!]*(but\s+)?/, "");      // drop a leading "ok," and read the rest
+    if (YES.test(t)) return { act: "confirm" };
+    if (NO.test(t)) return { act: "skip" };
+    const lost = () => (understand(text).unknown ? { act: "help" } : null);      // keep the draft when the message means nothing else
+    if (d.kind === "refill") {
+      const patch = {};
+      if (/\b90\b|three months|3 months/.test(t)) patch.supply = 90;
+      else if (/\b30\b|one month|1 month/.test(t)) patch.supply = 30;
+      if (/mail|deliver|ship/.test(t)) patch.how = "mail";
+      else if (/pick ?up|pharmacy|in person/.test(t)) patch.how = "pickup";
+      return Object.keys(patch).length ? { act: "set", patch } : lost();
+    }
+    if (d.kind !== "visit") return lost();
+    if (/^(and |so |but )?(how much|what (does|will|would|do) (it|this|that|i) (cost|pay|owe))/.test(t) && !/mri|scan|claim|deductible|therap|cover/.test(t)) return { act: "tell", line: d.costLine() };
+    if (/schedul|book|find|cover|claim|id card|deductible|refill|talk to|show my|how much|what is/.test(t)) return null;
     const s = d.state(), patch = {};
-    if (/video|virtual|online|telehealth/.test(t)) patch.video = true;
-    else if (/in.?person|office|face to face/.test(t)) patch.video = false;
-    DAY_NAMES.forEach((name, i) => { if (t.includes(name)) { const k = s.days.findIndex((x) => x.getDay() === i); if (k >= 0) patch.day = k; } });
+    if (/\b(no|not|without)( a)? video|in.?person|office|face to face/.test(t)) patch.video = false;
+    else if (/video|virtual|online|telehealth/.test(t)) patch.video = true;
+    // the day the member wants: skip days they ruled out ("thursday instead of friday"), and take the last one named
+    const said = t.replace(/\b(not|instead of|rather than|from)\s+(on\s+)?\w+/g, " ");
+    let at = -1;
+    DAY_RE.forEach((re, i) => { const hit = said.match(re), k = s.days.findIndex((x) => x.getDay() === i); if (hit && k >= 0 && hit.index > at) { at = hit.index; patch.day = k; } });
     let rest = t;
     if (/\b(next day|day later|day after|push it)\b/.test(t)) { patch.day = s.day + 1; rest = rest.replace(/day later/, ""); }
-    else if (/\bday (before|earlier)\b|sooner|soonest/.test(t)) patch.day = s.day - 1;
+    else if (/\bday (before|earlier)\b|sooner|soonest/.test(t)) { patch.day = s.day - 1; rest = rest.replace(/day earlier/, ""); }
     else if (/tomorrow/.test(t)) patch.day = 0;
     else if (/next week/.test(t)) { const k = s.days.findIndex((x, i) => i > 0 && x.getDay() === 1); if (k >= 0) patch.day = k; }
-    if (/morning|earl/.test(rest)) patch.slot = 0;
+    const onDay = SLOTS[clamp(patch.day != null ? patch.day : s.day, 0, 4)];
+    const clock = onDay.findIndex((x) => new RegExp("(^|[^\\d])" + x.replace(/ (AM|PM)$/, "") + "\\b").test(rest));   // "make it 10:30"
+    if (clock >= 0) patch.slot = clock;
+    else if (/\bmorning\b|\bearly\b/.test(rest)) patch.slot = 0;
     else if (/afternoon|evening|after work|end of day/.test(rest)) patch.slot = 2;
     else if (/\bnoon\b|midday|lunch/.test(rest)) patch.slot = 1;
+    else if (/\bearlier\b/.test(rest)) patch.slot = s.slot - 1;
     else if (/later/.test(rest)) patch.slot = s.slot + 1;
     const why = REASONS.find(([re]) => re.test(t));
     if (why) patch.reason = why[1];
-    return Object.keys(patch).length ? { act: "set", patch } : null;
+    return Object.keys(patch).length ? { act: "set", patch } : lost();
   }
 
   // a short exchange about the card that is already on screen (no new card)
   async function editInPlace(text, edit) {
     const d = activeDraft, turn = d.el.closest(".turn") || flow.lastElementChild;
     busy = true;
+    try {
     const q = document.createElement("div");
     q.className = "ask"; q.style.marginTop = "18px"; q.textContent = text;
     turn.appendChild(q);
     face.sent(q);
-    if (edit.act === "set") {
+    const glide = reduceMotion.matches ? "auto" : "smooth";
+    if (edit.act === "help" || edit.act === "tell") {
+      const line = edit.act === "tell" ? edit.line : d.help;
+      await speak(turn, line, "say--after");
+      turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
+      statusEl.textContent = line;
+    } else if (edit.act === "set") {
       const changed = d.set(edit.patch);
       const line = changed.length ? `Done. It is now ${d.describe()}. Confirm when you are ready.` : "It is already set that way. Confirm when you are ready.";
       const row = d.el.querySelector(".row.flash") || d.el;
-      row.scrollIntoView({ block: "center", behavior: reduceMotion.matches ? "auto" : "smooth" });
+      row.scrollIntoView({ block: "center", behavior: glide });
       await wait(pace(350));
       await speak(turn, line, "say--after");
+      turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });     // the reply stops just above the chat bar
       statusEl.textContent = line;
       face.lookAtEl(row);
     } else if (edit.act === "confirm") d.confirm();
     else d.skip();
-    busy = false;
+    } finally { busy = false; }
     return true;
   }
 
@@ -1703,9 +1827,11 @@
   async function ask(raw) {
     const text = String(raw || "").trim();
     if (!text || busy) return false;
-    const edit = readEdit(text);
+    if (window.matchMedia("(pointer: coarse)").matches) input.blur();     // on phones, put the keyboard away so the card has room
+    const edit = isUrgent(text) ? null : readEdit(text);   // safety always wins over an open draft
     if (edit) return editInPlace(text, edit);
     busy = true;
+    try {
     app.classList.add("has-flow");
     setDraft(null);                                   // a new request: older drafts can still be tapped, but typing no longer changes them
     flow.querySelectorAll(".mod").forEach((m) => m.classList.add("is-past"));
@@ -1735,7 +1861,12 @@
     if (last) face.lookAtEl(last);
     setChips(spec.next && spec.next.length ? spec.next : HOME_CHIPS);
     statusEl.textContent = spec.say + (last ? " A card was added below." : "");
-    busy = false;
+    // if a chip or button was used with the keyboard, do not leave focus on nothing
+    if (document.activeElement === document.body) {
+      const line = turn.querySelector(".say");
+      if (line) { line.tabIndex = -1; line.focus({ preventScroll: true }); }
+    }
+    } finally { busy = false; face.think(false); }
     return true;
   }
 
@@ -1964,16 +2095,32 @@
   avatarBtn.addEventListener("click", () => { if (input.value.trim()) submit(); else { input.focus(); face.hello(); } });
   homeBtn.addEventListener("click", () => { goHome(); face.blink(1, 60); });
 
+  // Page Up, Page Down and the arrow keys scroll the conversation, even while the text box has focus
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") root.classList.add("keys");
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.target !== input && e.target !== document.body) return;
+    const arrows = e.target !== input || !input.value;
+    const dy = { PageDown: 0.8, PageUp: -0.8, ArrowDown: arrows ? 0.15 : 0, ArrowUp: arrows ? -0.15 : 0 }[e.key];
+    if (!dy) return;
+    e.preventDefault();
+    page.scrollBy({ top: dy * page.clientHeight, behavior: e.repeat || reduceMotion.matches ? "auto" : "smooth" });
+  });
+  window.addEventListener("pointerdown", () => root.classList.remove("keys"));
+
   // keep the bar above the on-screen keyboard (needed on iOS)
   const vv = window.visualViewport;
   function syncViewport() {
     let kb = 0;
-    if (vv) kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    if (vv && vv.scale < 1.01) kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);   // ignore pinch zoom
     if (kb < 60) kb = 0;
     root.style.setProperty("--kb", kb + "px");
     root.classList.toggle("kb-open", kb > 0);
     if (kb > 0) window.scrollTo(0, 0);
     sizeLastTurn();
+    // keep the field being edited inside a card above the keyboard
+    const a = document.activeElement;
+    if (kb > 0 && a && a !== page && page.contains(a)) a.scrollIntoView({ block: "center" });
   }
   if (vv) { vv.addEventListener("resize", syncViewport); vv.addEventListener("scroll", syncViewport); }
   function onResize() { face.resize(); syncBar(); syncViewport(); }

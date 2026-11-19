@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<!--
+  Avatar chat bar
+  A chat input bar with a small green avatar that blinks and looks around.
+  One file, no build step, no network requests.
+
+  UI TYPE: widget (bottom chat bar)
+
+  COLORS
+    Page background ....... #0b0b0d
+    Bar surface ........... #121213  (top rim #1f1f20, bottom rim #1a1a1b)
+    Bar outline ........... rgba(255,255,255,0.13)
+    Icon / text ........... #ffffff / #f2f2f4
+    Placeholder ........... rgba(255,255,255,0.38)
+    Avatar green .......... #8ef0b0 (top light) / #3acb78 (middle) / #14964b (bottom)
+    Avatar glow edge ...... #128a50 fading into the bar
+    Eyes .................. #ffffff to #d5f3e0, mint rim #a5ffd0
+
+  TYPOGRAPHY
+    System font stack, input 16px / 400 (16px stops iOS from zooming in)
+
+  SIZES (H = bar height: 68px desktop, 60px phone)
+    Radius ................ 0.34 H (rounded rectangle, not a full pill)
+    Home icon ............. 24px inside a 48px button
+    Avatar ................ about 1.1 H wide, soft left edge about 0.25 H
+    Eyes .................. 0.45 H tall, 0.32 H wide when looking straight
+    Bar max width ......... 640px
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#0b0b0d" />
+<title>Avatar chat bar</title>
+<style>
+  :root {
+    --page: #0b0b0d;
+    --surface: #121213;
+    --text: #f2f2f4;
+    --text-dim: rgba(255, 255, 255, 0.38);
+    --line: rgba(255, 255, 255, 0.13);
+    --green-hi: #8ef0b0;
+    --green: #3acb78;
+    --green-lo: #14964b;
+    --h: 68px;            /* bar height, everything else scales from it */
+    --gutter: 16px;
+    --kb: 0px;            /* on-screen keyboard height, set from JS */
+    --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--page);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+
+  button, input { font: inherit; color: inherit; }
+  button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap;
+  }
+
+  /* ---------- page shell ---------- */
+
+  .app {
+    position: fixed;
+    inset: 0 0 var(--kb) 0;          /* lifts above the keyboard on iOS */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .thread {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding:
+      calc(20px + env(safe-area-inset-top, 0px))
+      max(var(--gutter), env(safe-area-inset-right, 0px))
+      18px
+      max(var(--gutter), env(safe-area-inset-left, 0px));
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 calc(100% - 20px), transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 28px, #000 calc(100% - 20px), transparent 100%);
+  }
+  .thread::-webkit-scrollbar { display: none; }
+
+  .thread-inner {
+    width: min(100%, 640px);
+    min-height: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  .msg {
+    max-width: min(82%, 46ch);
+    font-size: 15.5px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    animation: msg-in 0.42s var(--ease) both;
+  }
+  .msg--me {
+    align-self: flex-end;
+    padding: 10px 14px;
+    border-radius: 18px 18px 6px 18px;
+    background: #1b1b1e;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+  }
+  .msg--bot {
+    align-self: flex-start;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 6px 2px;
+    color: #dfe6e2;
+  }
+  .msg--bot::before {
+    content: "";
+    flex: none;
+    width: 10px; height: 10px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 30%, var(--green-hi), var(--green) 55%, var(--green-lo));
+    box-shadow: 0 0 10px rgba(58, 203, 120, 0.6);
+  }
+  @keyframes msg-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .dots { display: inline-flex; gap: 5px; align-items: center; height: 22px; }
+  .dots i {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(223, 230, 226, 0.75);
+    animation: dot 1.1s ease-in-out infinite;
+  }
+  .dots i:nth-child(2) { animation-delay: 0.15s; }
+  .dots i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dot {
+    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-3px); }
+  }
+
+  /* ---------- the bar ---------- */
+
+  .dock {
+    flex: none;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding:
+      6px
+      max(12px, env(safe-area-inset-right, 0px))
+      max(14px, env(safe-area-inset-bottom, 0px))
+      max(12px, env(safe-area-inset-left, 0px));
+  }
+  .kb-open .dock { padding-bottom: 10px; }
+
+  .bar {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: center;
+    width: min(100%, 640px);
+    height: var(--h);
+    border-radius: calc(var(--h) * 0.34);
+    background:
+      linear-gradient(180deg, #1f1f20 0%, #151516 9%, var(--surface) 20%, var(--surface) 82%, #161617 94%, #1a1a1b 100%);
+    box-shadow:
+      0 24px 60px -12px rgba(0, 0, 0, 0.7),
+      0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+  /* outline + soft inner rim, drawn above the avatar so the edge stays crisp */
+  .bar::after {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      inset 0 0 14px rgba(255, 255, 255, 0.035);
+    pointer-events: none;
+    z-index: 3;
+    transition: box-shadow 0.3s ease;
+  }
+  .bar:focus-within::after {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+      inset 0 0 14px rgba(255, 255, 255, 0.04);
+  }
+
+  /* ---------- home icon ---------- */
+
+  .icon-btn {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin-left: calc(var(--h) * 0.14);
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.2s ease, transform 0.2s var(--ease);
+  }
+  .icon-btn svg { width: 24px; height: 24px; display: block; }
+  @media (hover: hover) {
+    .icon-btn:hover { background: rgba(255, 255, 255, 0.06); }
+  }
+  .icon-btn:active { transform: scale(0.9); }
+  .icon-btn:focus-visible,
+  .send:focus-visible {
+    outline: 2px solid var(--green-hi);
+    outline-offset: -2px;
+  }
+
+  /* ---------- input ---------- */
+
+  .field {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    /* keep text clear of the avatar glow */
+    padding-right: calc(var(--h) * 1.32);
+    z-index: 2;
+  }
+  .field input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    height: 44px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 16px;
+    letter-spacing: 0.005em;
+    color: var(--text);
+    caret-color: var(--green-hi);
+    text-overflow: ellipsis;
+    -webkit-appearance: none;
+            appearance: none;
+  }
+  .field input::placeholder { color: var(--text-dim); opacity: 1; transition: opacity 0.2s ease; }
+  .field input:focus::placeholder { opacity: 0.7; }
+
+  .send {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 36px; height: 36px;
+    margin-left: 6px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+    opacity: 0;
+    transform: scale(0.6);
+    pointer-events: none;
+    position: relative;
+    transition: opacity 0.2s ease, transform 0.35s var(--ease), background 0.2s ease;
+  }
+  /* bigger hit area without a bigger circle */
+  .send::before { content: ""; position: absolute; inset: -5px; }
+  .send svg { width: 18px; height: 18px; display: block; }
+  .has-text .send { opacity: 1; transform: none; pointer-events: auto; }
+  @media (hover: hover) { .send:hover { background: rgba(255, 255, 255, 0.2); } }
+  .has-text .send:active { transform: scale(0.9); }
+
+  /* ---------- avatar ---------- */
+
+  .avatar {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;              /* clips the glow to the bar shape */
+    pointer-events: none;
+    z-index: 1;
+  }
+  /* wide, faint halo that tints the bar next to the avatar */
+  .avatar__halo {
+    position: absolute;
+    top: -22%; bottom: -22%;
+    right: calc(var(--h) * -0.3);
+    width: calc(var(--h) * 1.78);
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(18, 138, 80, 0.5), rgba(23, 87, 60, 0.28) 70%, rgba(19, 39, 30, 0) 100%);
+    opacity: var(--glow, 0.85);
+  }
+  /* the green body: a big soft circle that runs off the right end */
+  .avatar__body {
+    position: absolute;
+    top: calc(var(--h) * -0.41);
+    bottom: calc(var(--h) * -0.39);
+    right: calc(var(--h) * -0.67);
+    width: calc(var(--h) * 1.8);
+    border-radius: 50%;
+    background:
+      radial-gradient(34% 30% at 34% 30%, rgba(142, 240, 176, 0.95) 0%, rgba(118, 226, 158, 0.5) 52%, rgba(118, 226, 158, 0) 100%),
+      linear-gradient(90deg, rgba(16, 132, 76, 0.85) 0%, rgba(16, 132, 76, 0) 24%),
+      linear-gradient(180deg, #44d081 0%, #3acb78 38%, #25ad60 64%, #14964b 100%);
+    filter: blur(calc(var(--h) * 0.1));
+    transform: scale(var(--pulse, 1));
+    transform-origin: 70% 50%;
+  }
+  /* soft light sweep along the top edge, like the reference */
+  .avatar__sheen {
+    position: absolute;
+    top: 0; right: 0;
+    width: calc(var(--h) * 1.0);
+    height: 40%;
+    background: radial-gradient(60% 100% at 46% 0%, rgba(176, 255, 208, 0.3), rgba(176, 255, 208, 0) 100%);
+    filter: blur(calc(var(--h) * 0.06));
+  }
+
+  .face {
+    position: absolute;
+    top: 50%;
+    right: calc(var(--h) * 0.55);
+    width: 0; height: 0;
+  }
+  .eye {
+    position: absolute;
+    left: 0; top: 0;
+    width: calc(var(--h) * 0.32);
+    height: calc(var(--h) * 0.45);
+    margin: calc(var(--h) * -0.225) 0 0 calc(var(--h) * -0.16);
+    border-radius: 50%;
+    background:
+      radial-gradient(62% 52% at 38% 26%, #ffffff 0%, rgba(255, 255, 255, 0) 100%),
+      linear-gradient(172deg, #f6fef9 0%, #ecfbf1 50%, #d5f3e0 100%);
+    will-change: transform;
+  }
+  .eye--l {
+    box-shadow:
+      inset calc(var(--h) * 0.016) calc(var(--h) * -0.012) calc(var(--h) * 0.014) rgba(150, 255, 200, 0.9),
+      0 0 calc(var(--h) * 0.05) rgba(190, 255, 220, 0.3),
+      0 calc(var(--h) * 0.02) calc(var(--h) * 0.07) rgba(8, 92, 46, 0.35);
+  }
+  .eye--r {
+    box-shadow:
+      inset calc(var(--h) * -0.016) calc(var(--h) * -0.014) calc(var(--h) * 0.014) rgba(150, 255, 200, 0.9),
+      0 0 calc(var(--h) * 0.05) rgba(190, 255, 220, 0.3),
+      0 calc(var(--h) * 0.02) calc(var(--h) * 0.07) rgba(8, 92, 46, 0.35);
+  }
+
+  /* the avatar is also a button: tap it to send, or to start typing */
+  .avatar-btn {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: calc(var(--h) * 1.12);
+    border: 0;
+    background: transparent;
+    border-radius: 0 calc(var(--h) * 0.34) calc(var(--h) * 0.34) 0;
+    cursor: pointer;
+    z-index: 4;
+  }
+  .avatar-btn:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: -4px;
+  }
+
+  /* ---------- sizes ---------- */
+
+  @media (max-width: 560px) {
+    :root { --h: 60px; --gutter: 14px; }
+    .icon-btn { margin-left: 6px; }
+    .field { padding-left: 4px; padding-right: calc(var(--h) * 1.3); }
+    .msg { font-size: 16px; }
+  }
+  @media (max-height: 420px) {
+    :root { --h: 52px; }
+    .dock { padding-bottom: max(8px, env(safe-area-inset-bottom, 0px)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .msg, .dots i { animation: none; }
+    .send, .icon-btn { transition-duration: 0.01s; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <div class="thread" id="thread">
+    <div class="thread-inner" id="messages" role="log" aria-live="polite" aria-label="Messages"></div>
+  </div>
+
+  <div class="dock">
+    <form class="bar" id="bar" autocomplete="off" novalidate>
+
+      <!-- avatar paint layer (sits under the content, clipped to the bar) -->
+      <div class="avatar" id="avatar" aria-hidden="true">
+        <span class="avatar__halo"></span>
+        <span class="avatar__body"></span>
+        <span class="avatar__sheen"></span>
+        <span class="face">
+          <span class="eye eye--l" id="eyeL"></span>
+          <span class="eye eye--r" id="eyeR"></span>
+        </span>
+      </div>
+
+      <button class="icon-btn" id="home" type="button" aria-label="Home">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M10.5 3.4a2.2 2.2 0 0 1 3 0l5.6 5.1c.6.5.9 1.2.9 2V18a2.5 2.5 0 0 1-2.5 2.5h-1.4a1.3 1.3 0 0 1-1.3-1.3v-4a1.7 1.7 0 0 0-1.7-1.7h-2.2a1.7 1.7 0 0 0-1.7 1.7v4a1.3 1.3 0 0 1-1.3 1.3H6.5A2.5 2.5 0 0 1 4 18v-7.5c0-.8.3-1.5.9-2z"/>
+        </svg>
+      </button>
+
+      <div class="field">
+        <label class="sr-only" for="message">Message</label>
+        <input id="message" name="message" type="text" inputmode="text" enterkeyhint="send"
+               placeholder="Ask anything" autocomplete="off" autocapitalize="sentences" spellcheck="true" maxlength="2000" />
+        <button class="send" id="send" type="submit" aria-label="Send message" tabindex="-1">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5.5"/><path d="M6 11.2 12 5.2l6 6"/>
+          </svg>
+        </button>
+      </div>
+
+      <button class="avatar-btn" id="avatarBtn" type="button" aria-label="Start typing"></button>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement;
+  const bar = $("bar");
+  const homeBtn = $("home");
+  const input = $("message");
+  const sendBtn = $("send");
+  const avatarBtn = $("avatarBtn");
+  const avatarEl = $("avatar");
+  const eyeL = $("eyeL");
+  const eyeR = $("eyeR");
+  const thread = $("thread");
+  const messages = $("messages");
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  /* =========================================================
+     Avatar: eyes with a tiny motion model
+     gaze  : where it looks, x and y from -1 to 1
+     lid   : 0 = open, 1 = closed
+     open  : how wide the eyes are (1 = normal)
+     ========================================================= */
+
+  const REST = { x: -0.78, y: 0 };          // the pose in the reference: looking toward the input
+  const eyes = {
+    x: REST.x, y: REST.y, vx: 0, vy: 0,     // current gaze + speed
+    tx: REST.x, ty: REST.y,                 // gaze target
+    lid: 0, lidTarget: 0,
+    open: 1, openTarget: 1,
+    hop: 0, hopV: 0,                        // little vertical bounce
+    glow: 0.85, glowTarget: 0.85,
+  };
+  let mode = "idle";                        // idle | follow | typing | thinking
+  let running = false;
+  let lastT = 0;
+  let H = 68;
+
+  function readSize() {
+    H = parseFloat(getComputedStyle(bar).getPropertyValue("height")) || 68;
+  }
+
+  function render() {
+    const gx = eyes.x, gy = eyes.y;
+    // looking sideways: the eye on that side gets thinner, the other gets wider
+    const K = 0.2;
+    const w0 = 0.32 * H, gap = 0.085 * H;
+    const wl = w0 * (1 + K * gx);
+    const wr = w0 * (1 - K * gx);
+    const total = 2 * w0 + gap;
+    const shiftX = (gx < 0 ? 0.13 : 0.085) * H * gx;
+    const shiftY = 0.085 * H * gy + eyes.hop * H;
+    const lx = -total / 2 + wl / 2 + shiftX;
+    const rx = total / 2 - wr / 2 + shiftX;
+    const lidScale = Math.max(0.06, (1 - eyes.lid) * eyes.open * (1 - 0.05 * Math.abs(gy)));
+    const tilt = 4 * gx;                    // degrees, tiny lean into the turn
+    eyeL.style.transform =
+      `translate(${lx.toFixed(2)}px, ${shiftY.toFixed(2)}px) rotate(${(-tilt * 0.9).toFixed(2)}deg) scale(${(wl / w0).toFixed(3)}, ${lidScale.toFixed(3)})`;
+    eyeR.style.transform =
+      `translate(${rx.toFixed(2)}px, ${shiftY.toFixed(2)}px) rotate(${(-tilt * 1.6).toFixed(2)}deg) scale(${(wr / w0).toFixed(3)}, ${lidScale.toFixed(3)})`;
+    avatarEl.style.setProperty("--glow", eyes.glow.toFixed(3));
+    avatarEl.style.setProperty("--pulse", (1 + (eyes.glow - 0.85) * 0.12).toFixed(4));
+  }
+
+  function step(t) {
+    const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016);
+    lastT = t;
+
+    // spring toward the gaze target (quick, with a hint of overshoot)
+    const stiff = mode === "follow" ? 170 : 120, damp = mode === "follow" ? 22 : 17;
+    eyes.vx += ((eyes.tx - eyes.x) * stiff - eyes.vx * damp) * dt;
+    eyes.vy += ((eyes.ty - eyes.y) * stiff - eyes.vy * damp) * dt;
+    eyes.x += eyes.vx * dt;
+    eyes.y += eyes.vy * dt;
+
+    // eyelids move fast: close in about 70ms, open a little slower
+    const lidSpeed = eyes.lidTarget > eyes.lid ? 18 : 11;
+    eyes.lid += (eyes.lidTarget - eyes.lid) * Math.min(1, lidSpeed * dt * 1.6);
+    eyes.open += (eyes.openTarget - eyes.open) * Math.min(1, 9 * dt);
+    eyes.glow += (eyes.glowTarget - eyes.glow) * Math.min(1, 5 * dt);
+
+    // bounce
+    eyes.hopV += (-eyes.hop * 260 - eyes.hopV * 14) * dt;
+    eyes.hop += eyes.hopV * dt;
+
+    if (mode === "thinking") {
+      // slow side to side while it thinks
+      const s = t / 1000;
+      eyes.tx = -0.35 + Math.sin(s * 2.4) * 0.42;
+      eyes.ty = -0.72 + Math.sin(s * 4.8) * 0.06;
+      eyes.glowTarget = 0.95 + Math.sin(s * 5) * 0.12;
+    }
+
+    render();
+
+    const settled =
+      mode !== "thinking" &&
+      Math.abs(eyes.tx - eyes.x) < 0.002 && Math.abs(eyes.ty - eyes.y) < 0.002 &&
+      Math.abs(eyes.vx) < 0.01 && Math.abs(eyes.vy) < 0.01 &&
+      Math.abs(eyes.lidTarget - eyes.lid) < 0.005 &&
+      Math.abs(eyes.openTarget - eyes.open) < 0.005 &&
+      Math.abs(eyes.glowTarget - eyes.glow) < 0.005 &&
+      Math.abs(eyes.hop) < 0.0005 && Math.abs(eyes.hopV) < 0.005;
+
+    if (settled) { running = false; return; }
+    requestAnimationFrame(step);
+  }
+
+  function wake() {
+    if (running) return;
+    running = true;
+    lastT = performance.now();
+    requestAnimationFrame(step);
+  }
+
+  function lookAt(x, y) {
+    eyes.tx = clamp(x, -1, 1);
+    eyes.ty = clamp(y, -1, 1);
+    wake();
+  }
+
+  // look at a point on the page (client coordinates)
+  function lookAtPoint(px, py) {
+    const r = bar.getBoundingClientRect();
+    const cx = r.right - H * 0.55, cy = r.top + r.height / 2;
+    const dx = px - cx, dy = py - cy;
+    // gentle curve: nearby things still move the eyes a clear amount
+    const nx = dx / (Math.abs(dx) + Math.max(140, window.innerWidth * 0.22));
+    const ny = dy / (Math.abs(dy) + Math.max(110, window.innerHeight * 0.2));
+    lookAt(nx * 1.25, ny * 1.25);
+  }
+
+  /* ---- blinking ---- */
+
+  let blinkTimer = 0;
+  function blink(times = 1, hold = 70) {
+    if (eyes.lidTarget === 1) return;
+    let n = times;
+    const once = () => {
+      eyes.lidTarget = 1; wake();
+      setTimeout(() => {
+        eyes.lidTarget = 0; wake();
+        if (--n > 0) setTimeout(once, 150);
+      }, hold);
+    };
+    once();
+  }
+  function scheduleBlink() {
+    clearTimeout(blinkTimer);
+    const wait = reduceMotion.matches ? rand(5000, 8000) : rand(2200, 5600);
+    blinkTimer = setTimeout(() => {
+      if (!document.hidden) {
+        if (reduceMotion.matches) blink(1, 140);
+        else blink(Math.random() < 0.16 ? 2 : 1, rand(60, 90));
+      }
+      scheduleBlink();
+    }, wait);
+  }
+
+  /* ---- looking around when nothing else is going on ---- */
+
+  let wanderTimer = 0;
+  function wander() {
+    clearTimeout(wanderTimer);
+    if (reduceMotion.matches) return;
+    wanderTimer = setTimeout(() => {
+      if (mode === "idle" && !document.hidden) {
+        const roll = Math.random();
+        let x, y;
+        if (roll < 0.3) { x = REST.x + rand(-0.12, 0.12); y = rand(-0.1, 0.1); }        // back to the input
+        else if (roll < 0.52) { x = rand(-0.12, 0.12); y = rand(-0.08, 0.08); }       // straight at you
+        else if (roll < 0.74) { x = rand(-0.9, -0.2); y = rand(-0.85, -0.35); }       // up at the page
+        else if (roll < 0.88) { x = rand(0.35, 0.8); y = rand(-0.4, 0.25); }          // off to the right
+        else { x = rand(-1, -0.5); y = rand(0.2, 0.6); }                              // down and left
+        const far = Math.hypot(x - eyes.x, y - eyes.y) > 0.9;
+        lookAt(x, y);
+        if (far && Math.random() < 0.45) blink(1, 60);      // people often blink on a big look
+        // sometimes a quick second glance
+        if (Math.random() < 0.22) {
+          setTimeout(() => { if (mode === "idle") lookAt(x + rand(-0.25, 0.25), y + rand(-0.2, 0.2)); }, rand(260, 520));
+        }
+      }
+      wander();
+    }, rand(1100, 3400));
+  }
+
+  /* ---- modes ---- */
+
+  let followTimer = 0;
+  function setMode(next) {
+    mode = next;
+    if (next === "idle") { eyes.glowTarget = 0.85; eyes.openTarget = document.activeElement === input ? 1.05 : 1; }
+    wake();
+  }
+
+  function follow(px, py) {
+    if (reduceMotion.matches || mode === "thinking") return;
+    if (mode !== "follow") mode = "follow";
+    lookAtPoint(px, py);
+    clearTimeout(followTimer);
+    followTimer = setTimeout(() => {
+      if (mode === "follow") setMode(document.activeElement === input && input.value ? "typing" : "idle");
+      if (mode === "typing") watchCaret();
+    }, 1500);
+  }
+
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") return;      // touches are handled below
+    follow(e.clientX, e.clientY);
+  }, { passive: true });
+  window.addEventListener("pointerdown", (e) => follow(e.clientX, e.clientY), { passive: true });
+  window.addEventListener("touchmove", (e) => {
+    const t = e.touches[0];
+    if (t) follow(t.clientX, t.clientY);
+  }, { passive: true });
+  document.documentElement.addEventListener("pointerleave", () => { if (mode === "follow") setMode("idle"); });
+
+  /* ---- watching the caret while you type ---- */
+
+  const measure = document.createElement("canvas").getContext("2d");
+  function caretX() {
+    const cs = getComputedStyle(input);
+    measure.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+    const w = measure.measureText(input.value.slice(0, pos)).width;
+    const r = input.getBoundingClientRect();
+    return r.left + clamp(w - input.scrollLeft, 0, r.width);
+  }
+  function watchCaret() {
+    if (reduceMotion.matches) return;
+    const r = input.getBoundingClientRect();
+    lookAtPoint(caretX() + 6, r.top + r.height * 0.62);
+  }
+
+  /* =========================================================
+     Chat bar behaviour
+     ========================================================= */
+
+  function syncState() {
+    const hasText = input.value.trim().length > 0;
+    bar.classList.toggle("has-text", hasText);
+    sendBtn.tabIndex = hasText ? 0 : -1;
+    avatarBtn.setAttribute("aria-label", hasText ? "Send message" : "Start typing");
+  }
+
+  input.addEventListener("focus", () => {
+    eyes.openTarget = 1.05;
+    if (mode !== "thinking") { setMode(input.value ? "typing" : "idle"); watchCaret(); }
+  });
+  input.addEventListener("blur", () => {
+    eyes.openTarget = 1;
+    if (mode === "typing") setMode("idle");
+    wake();
+  });
+  input.addEventListener("input", () => {
+    syncState();
+    if (mode === "thinking") return;
+    setMode("typing");
+    watchCaret();
+    if (!reduceMotion.matches) { eyes.hopV -= 0.22; }      // tiny nod on each key
+    wake();
+  });
+  ["keyup", "click", "select"].forEach((ev) =>
+    input.addEventListener(ev, () => { if (mode === "typing") watchCaret(); })
+  );
+
+  // home: the avatar glances at it when you press it
+  homeBtn.addEventListener("click", () => {
+    if (reduceMotion.matches) return;
+    const r = homeBtn.getBoundingClientRect();
+    lookAtPoint(r.left + r.width / 2, r.top + r.height / 2);
+    blink(1, 60);
+  });
+
+  avatarBtn.addEventListener("click", () => {
+    if (input.value.trim()) { submit(); }
+    else {
+      input.focus();
+      if (!reduceMotion.matches) { eyes.hopV -= 1.1; eyes.openTarget = 1.12; setTimeout(() => { eyes.openTarget = 1.05; wake(); }, 260); }
+      blink(2, 60);
+    }
+  });
+
+  /* ---- messages ---- */
+
+  function scrollDown() { thread.scrollTop = thread.scrollHeight; }
+
+  function addMessage(text, who) {
+    const el = document.createElement("div");
+    el.className = "msg msg--" + who;
+    const body = document.createElement("span");
+    body.textContent = text;
+    el.appendChild(body);
+    messages.appendChild(el);
+    scrollDown();
+    return el;
+  }
+
+  function addTyping() {
+    const el = document.createElement("div");
+    el.className = "msg msg--bot";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+    messages.appendChild(el);
+    scrollDown();
+    return el;
+  }
+
+  // Demo replies. Swap this function for a real call to your chat backend.
+  const stock = [
+    "Got it. This is just a demo, so I can't really answer yet.",
+    "Nice. Hook me up to a real chat service and I'll say more.",
+    "I heard you. For now I only know a few lines.",
+    "Good one. I'm a demo bar, but I am paying attention.",
+  ];
+  let stockIndex = 0;
+  async function getReply(text) {
+    const t = text.toLowerCase();
+    await new Promise((r) => setTimeout(r, rand(1100, 1900)));
+    if (/^(hi|hey|hello|yo|sup)\b/.test(t)) return "Hi there. Nice to see you.";
+    if (/\b(blink|wink)\b/.test(t)) { setTimeout(() => blink(3, 70), 200); return "Like this?"; }
+    if (/\b(who|what) are you\b/.test(t)) return "I'm the little face on your chat bar. I blink and look around.";
+    if (t.endsWith("?")) return "Good question. I'm only a demo, so I don't have a real answer yet.";
+    return stock[stockIndex++ % stock.length];
+  }
+
+  let busy = false;
+  async function submit() {
+    const text = input.value.trim();
+    if (!text || busy) return;
+    busy = true;
+    input.value = "";
+    syncState();
+
+    const mine = addMessage(text, "me");
+
+    // happy little reaction: squint, hop, then look up at the message
+    if (!reduceMotion.matches) {
+      eyes.hopV -= 1.5;
+      eyes.openTarget = 0.5;
+      eyes.glowTarget = 1.15;
+      wake();
+      setTimeout(() => { eyes.openTarget = 1.08; wake(); }, 240);
+      const r = mine.getBoundingClientRect();
+      setTimeout(() => { if (busy) lookAtPoint(r.left + r.width / 2, r.top + r.height / 2); }, 120);
+    }
+
+    const typing = addTyping();
+    const thinkDelay = setTimeout(() => { if (busy && !reduceMotion.matches) setMode("thinking"); }, 520);
+
+    let reply;
+    try { reply = await getReply(text); }
+    catch (err) { reply = "Something went wrong. Please try again."; }
+
+    clearTimeout(thinkDelay);
+    typing.remove();
+    const el = addMessage(reply, "bot");
+    busy = false;
+
+    // look at the reply, blink, then go back to what it was doing
+    setMode("idle");
+    if (!reduceMotion.matches) {
+      const r = el.getBoundingClientRect();
+      lookAtPoint(r.left + Math.min(r.width, 160) / 2, r.top + r.height / 2);
+      blink(1, 70);
+    }
+    wander();
+  }
+
+  bar.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
+
+  /* =========================================================
+     Layout helpers
+     ========================================================= */
+
+  // keep the bar above the on-screen keyboard (needed on iOS)
+  const vv = window.visualViewport;
+  function syncViewport() {
+    let kb = 0;
+    if (vv) kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    if (kb < 60) kb = 0;                         // ignore browser toolbars
+    root.style.setProperty("--kb", kb + "px");
+    root.classList.toggle("kb-open", kb > 0);
+    if (kb > 0) { window.scrollTo(0, 0); scrollDown(); }
+  }
+  if (vv) {
+    vv.addEventListener("resize", syncViewport);
+    vv.addEventListener("scroll", syncViewport);
+  }
+
+  function onResize() {
+    readSize();
+    syncState();
+    syncViewport();
+    render();
+  }
+  window.addEventListener("resize", onResize);
+  window.addEventListener("orientationchange", onResize);
+
+  const onMotionPref = () => {
+    if (reduceMotion.matches) { clearTimeout(wanderTimer); mode = "idle"; lookAt(REST.x, REST.y); }
+    else wander();
+    scheduleBlink();
+  };
+  if (reduceMotion.addEventListener) reduceMotion.addEventListener("change", onMotionPref);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) { scheduleBlink(); wander(); wake(); }
+  });
+
+  /* ---- go ---- */
+  onResize();
+  scheduleBlink();
+  wander();
+  // a small hello: a quick blink shortly after load
+  setTimeout(() => blink(reduceMotion.matches ? 1 : 2, 70), 700);
+})();
+</script>
+</body>
+</html>

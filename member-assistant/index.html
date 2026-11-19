@@ -413,6 +413,26 @@
   }
   .step::after { content: ""; position: absolute; top: 6px; left: 0; right: 0; height: 2px; background: var(--green-wash); }
   .step:last-child::after { display: none; }
+  .step.is-now::before { background: #fff; box-shadow: inset 0 0 0 3px var(--green-lo), 0 0 0 4px var(--green-wash); }
+  .step.is-now::after, .step.is-next::after { background: var(--wash-2); }
+  .step.is-next::before { background: #fff; box-shadow: inset 0 0 0 2px #cfd3cc; }
+  .step.is-next b { color: var(--ink-2); }
+
+  /* cost estimate */
+  .keyfact { padding: 0 0 12px; }
+  .keyfact b { display: block; font-size: 34px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .keyfact span { font-size: 14.5px; color: var(--ink-2); }
+  .opts--list { flex-direction: column; flex-wrap: nowrap; }
+  .opts--list span { display: flex; justify-content: space-between; gap: 12px; border-radius: 14px; padding: 0 14px; min-height: 48px; white-space: normal; text-align: left; }
+  .opts--list span b { font-weight: 500; }
+  .opts--list span em { font-style: normal; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .math { border-top: 1px solid var(--line); }
+  .math summary { list-style: none; cursor: pointer; padding: 12px 0; font-size: 14.5px; font-weight: 600; color: var(--green-ink); display: flex; justify-content: space-between; align-items: center; }
+  .math summary::-webkit-details-marker { display: none; }
+  .math summary::after { content: "+"; font-size: 20px; font-weight: 400; line-height: 1; }
+  .math[open] summary::after { content: "\2212"; }
+  .math .sum { border-top: 0; padding-top: 0; padding-bottom: 6px; font-size: 14.5px; }
+  .math .sum div span:first-child { max-width: 70%; }
   .sum { display: grid; gap: 7px; padding: 12px 0 2px; border-top: 1px solid var(--line); font-size: 15px; }
   .sum div { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
   .sum .sum__total { color: var(--ink); font-weight: 650; font-size: 17px; padding-top: 8px; border-top: 1px solid var(--line); }
@@ -657,7 +677,7 @@
     :root { --h: 60px; --gutter: 16px; }
     .icon-btn { margin-left: 6px; }
     .field { padding-left: 4px; padding-right: calc(var(--h) * 1.3); }
-    .row { grid-template-columns: 62px minmax(0, 1fr); padding: 10px 0; }
+    .row { grid-template-columns: 78px minmax(0, 1fr); padding: 10px 0; }
     .row--stack { grid-template-columns: minmax(0, 1fr); }
     .row--stack .row__label { margin-bottom: 2px; }
     .mod { border-radius: 24px; }
@@ -796,7 +816,7 @@
 
   const BENEFITS = [
     { re: /physical therap|physio|\bpt\b/, name: "Physical therapy", covered: true, pay: "$40 per visit", note: "This is your copay. You do not need to meet your deductible first.", limit: ["Visits used this year", 4, 30], approval: "Not needed for your first 12 visits", spec: "pt" },
-    { re: /\bmri\b|\bct\b|scan|imaging|x-?ray/, name: "MRI and CT scans", covered: true, pay: "20% after your deductible", note: "Most members pay about $180 to $320 at an in-network imaging center.", approval: "Needed first. Your doctor sends the request.", warn: true, next: "My deductible" },
+    { re: /\bmri\b|\bct\b|scan|imaging|x-?ray/, name: "MRI and CT scans", covered: true, pay: "20% after your deductible", note: "Most members pay about $180 to $320 at an in-network imaging center.", approval: "Needed first. Your doctor sends the request.", warn: true, next: "What will an MRI cost?" },
     { re: /therap|counsel|mental|psych/, name: "Mental health visits", covered: true, pay: "$25 per visit", note: "Same price in person. Video visits are $10.", approval: "Not needed", spec: "therapy" },
     { re: /urgent care/, name: "Urgent care", covered: true, pay: "$75 per visit", note: "An emergency room visit is $250, so urgent care can save you money when it is not an emergency.", approval: "Not needed" },
     { re: /emergency room|\ber\b|ambulance/, name: "Emergency room", covered: true, pay: "$250 per visit", note: "Covered at any hospital, in network or not. The copay is dropped if you are admitted.", approval: "Never needed in an emergency" },
@@ -804,6 +824,14 @@
     { re: /dermatolog|skin/, name: "Dermatology visits", covered: true, pay: "$50 per visit", note: "This is your specialist copay.", approval: "No referral needed", spec: "derm" },
     { re: /acupunct/, name: "Acupuncture", covered: false, pay: "Full price", note: "Your plan does not pay for this. You can use HSA or FSA money for it." },
     { re: /massage/, name: "Massage therapy", covered: false, pay: "Full price", note: "Your plan does not pay for this unless it is part of physical therapy." },
+  ];
+
+  // prices the plan has agreed to, used for cost estimates
+  const ESTIMATES = [
+    { re: /\bmri\b|scan|imaging/, name: "MRI of the knee", needsApproval: true, places: [
+      { name: "Lakeside Imaging Center", dist: "2.1 mi", price: 900 },
+      { name: "City General Hospital", dist: "3.4 mi", price: 1800 },
+    ] },
   ];
 
   /* =========================================================
@@ -815,7 +843,15 @@
      The page only ever draws card types it knows (see MODULES below).
      ========================================================= */
 
-  const HOME_CHIPS = ["Schedule a visit", "Is physical therapy covered?", "Find a dermatologist", "Where is my claim?", "Show my ID card", "My deductible", "Talk to a person"];
+  const HOME_CHIPS = ["Schedule a visit", "What will an MRI cost?", "Is physical therapy covered?", "Find a dermatologist", "Where is my claim?", "Show my ID card", "Talk to a person"];
+
+  // the member's part of a price: the rest of the deductible first, then 20% of what is left
+  function yourShare(price) {
+    const left = Math.max(0, USAGE.deductible[1] - USAGE.deductible[0]);
+    const toDeductible = Math.min(price, left);
+    const share = Math.round((price - toDeductible) * 0.2);
+    return { price, toDeductible, rest: price - toDeductible, share, you: toDeductible + share, plan: price - toDeductible - share };
+  }
 
   function findSpecialty(t) { return SPECIALTIES.find((s) => s.re.test(t)) || null; }
   function findDoctor(t) {
@@ -878,6 +914,17 @@
         return { say: "Here are the fastest ways to get care today. None of these need an appointment.", ui: [{ type: "urgent", props: { calm: true } }], next: ["Is urgent care covered?", "Talk to a person"] };
       const spec = findSpecialty(t) || SPEC.primary;
       return { say: `I found 3 ${spec.noun} near you. All of them are in your network, so you pay the lower price.`, ui: [{ type: "providers", props: { spec: spec.key } }], next: [`Is ${spec.label.toLowerCase()} covered?`, "Show my ID card"] };
+    }
+
+    if (/prior auth|pre.?auth|authoriz|approval status|approved|my approval|waiting (for|on) approval/.test(t))
+      return { say: "Your MRI request is with your plan now. You do not need to do anything. A decision is due within a week.", ui: [{ type: "approval", props: {} }], next: ["What will an MRI cost?", "Talk to a person"] };
+
+    if (/how much|cost|price|estimate|what will i (pay|owe)/.test(t)) {
+      const e = ESTIMATES.find((x) => x.re.test(t));
+      if (e) {
+        const low = Math.min(...e.places.map((pl) => yourShare(pl.price).you));
+        return { say: `An MRI would cost you about ${money(low)} at the lower priced place near you. Here is how I got that number.`, ui: [{ type: "cost", props: { estimate: e } }], next: ["Is my MRI approved?", "My deductible", "Find a bone and joint doctor"] };
+      }
     }
 
     if (/cover|pay for|how much|cost|price|do i need (a referral|approval)|included/.test(t)) {
@@ -1159,6 +1206,64 @@
     return m.el;
   };
 
+  /* ---- what will it cost? shows the number first, then the math ---- */
+  MODULES.cost = (p, api) => {
+    const e = p.estimate, n = "c" + (++seq);
+    const m = shell("Cost estimate", ICON.chart, '<span class="pill pill--warn">Estimate</span>');
+    let pick = e.places.reduce((best, pl, i) => (yourShare(pl.price).you < yourShare(e.places[best].price).you ? i : best), 0);
+    m.body.innerHTML =
+      `<div class="verdict part" style="padding-bottom:4px"><b>${esc(e.name)}</b></div>
+       <div class="keyfact part"><b data-you></b><span data-at></span></div>
+       <div class="row row--stack part"><span class="row__label" id="${n}-pl">Where</span>
+         <div class="opts opts--list" role="radiogroup" aria-labelledby="${n}-pl">${e.places.map((pl, i) =>
+           `<label class="opt"><input type="radio" name="${n}-place" value="${i}"${i === pick ? " checked" : ""} /><span><b>${esc(pl.name)}</b><em>${money(yourShare(pl.price).you)}</em></span></label>`).join("")}</div></div>
+       <details class="math part"><summary>Show the math</summary><div class="sum" data-math></div></details>
+       <p class="fine part">Based on your ${esc(MEMBER.plan)} plan and what you have paid so far this year. This is an estimate, not a bill. The final amount can change.${e.needsApproval ? " An MRI needs approval from your plan first." : ""}</p>`;
+    const youEl = $("[data-you]", m.el), atEl = $("[data-at]", m.el), mathEl = $("[data-math]", m.el);
+    function draw() {
+      const pl = e.places[pick], x = yourShare(pl.price);
+      youEl.textContent = "About " + money(x.you);
+      atEl.textContent = `at ${pl.name} · ${pl.dist} away`;
+      mathEl.innerHTML =
+        `<div><span>Price your plan agreed to</span><span>${money(x.price)}</span></div>
+         <div><span>Left on your deductible (you pay this first)</span><span>${money(x.toDeductible)}</span></div>
+         <div><span>Your 20% of the other ${money(x.rest)}</span><span>${money(x.share)}</span></div>
+         <div><span>Your plan pays</span><span>${money(x.plan)}</span></div>
+         <div class="sum__total"><span>You pay about</span><span>${money(x.you)}</span></div>`;
+    }
+    draw();
+    m.el.addEventListener("change", (ev) => { if (ev.target.name === `${n}-place`) { pick = +ev.target.value; draw(); } });
+    if (e.needsApproval) {
+      m.actions.innerHTML = `<button class="btn btn--quiet part" type="button">Check my approval</button>`;
+      $("button", m.actions).addEventListener("click", () => api.ask("Is my MRI approved?"));
+    }
+    return m.el;
+  };
+
+  /* ---- approval from the plan before care (prior authorization) ---- */
+  MODULES.approval = (p, api) => {
+    const m = shell("Approval", ICON.shield, '<span class="pill pill--warn">In review</span>');
+    const day = (offset) => { const d = new Date(); d.setDate(d.getDate() + offset); return fmt(d, { month: "short", day: "numeric" }); };
+    m.body.innerHTML =
+      `<div class="who part"><span class="who__pic" aria-hidden="true">GL</span><span class="who__txt"><b>MRI of the knee</b><span>Asked for by Dr. Grace Lin</span></span></div>
+       <div class="steps part" role="list" aria-label="Approval progress">
+         <div class="step" role="listitem"><b>Sent</b>${day(-6)}</div>
+         <div class="step is-now" role="listitem"><b>In review</b>Now</div>
+         <div class="step is-next" role="listitem"><b>Decision</b>By ${day(7)}</div></div>
+       <div class="row part"><span class="row__label">Waiting on</span><div class="row__val"><b>Your plan</b></div></div>
+       <div class="row part"><span class="row__label">You need to</span><div class="row__val"><b>Do nothing right now</b><span class="note">Please wait to book the MRI until this is decided.</span></div></div>
+       <p class="fine part">I will show the decision here as soon as your plan makes it. I cannot predict the answer.</p>`;
+    m.actions.innerHTML = `<button class="btn btn--quiet part" type="button" data-notify aria-pressed="false">Text me when it is decided</button>`;
+    const btn = $("[data-notify]", m.el);
+    btn.addEventListener("click", () => {
+      const on = btn.getAttribute("aria-pressed") !== "true";
+      btn.setAttribute("aria-pressed", String(on));
+      btn.textContent = on ? "You will get a text. Tap to undo." : "Text me when it is decided";
+      statusEl.textContent = on ? "You will get a text when it is decided." : "Text reminder turned off.";
+    });
+    return m.el;
+  };
+
   /* ---- claim status ---- */
   MODULES.claim = (p, api) => {
     const m = shell("Claim", ICON.doc, '<span class="pill pill--ok">Paid</span>');
@@ -1432,7 +1537,8 @@
   // while the member types, the chips guess what they mean
   const PHRASES = ["Schedule a visit", "Schedule a video visit", "Schedule my yearly checkup", "Find a dermatologist", "Find a therapist",
     "Find a physical therapist", "Find urgent care near me", "Is physical therapy covered?", "Is an MRI covered?", "Is acupuncture covered?",
-    "Where is my claim?", "Show my ID card", "My deductible", "Refill my prescription", "Talk to a person", "Talk to a nurse"];
+    "Where is my claim?", "Show my ID card", "My deductible", "Refill my prescription", "Talk to a person", "Talk to a nurse",
+    "What will an MRI cost?", "Is my MRI approved?"];
   function predict(text) {
     const words = text.toLowerCase().replace(/[?.,!]/g, "").split(/\s+/).filter(Boolean);
     if (!words.length) return [];

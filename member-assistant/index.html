@@ -863,6 +863,7 @@
   }
   .mic::before { content: ""; position: absolute; inset: -5px; }            /* 46px tap area */
   .mic svg { width: 19px; height: 19px; display: block; position: relative; }
+  .mic .stop { display: none; }
   .mic:active { transform: scale(0.9); }
   .bar.has-text:not(.is-listening) .mic { width: 0; margin-left: 0; opacity: 0; transform: scale(0.6); pointer-events: none; }
   .bar.is-listening .send { width: 0; margin-left: 0; opacity: 0; pointer-events: none; }
@@ -875,6 +876,11 @@
   .mic::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; pointer-events: none; opacity: 0; }
   .bar.is-listening .mic::after { box-shadow: 0 0 0 2px rgba(58, 203, 120, 0.55); animation: mic-ring 1.5s ease-out infinite; }
   .bar.is-hearing .mic::after { animation-duration: 0.75s; }
+  /* it asked something out loud and is waiting for a tap on the mic */
+  .bar.wants-answer:not(.is-listening) .mic::after { box-shadow: 0 0 0 2px rgba(58, 203, 120, 0.5); animation: mic-ring 2.4s ease-out infinite; }
+  /* while it talks, the mic is a stop button */
+  .bar.is-speaking:not(.is-listening) .mic .wave { display: none; }
+  .bar.is-speaking:not(.is-listening) .mic .stop { display: block; }
   @keyframes mic-ring { from { transform: scale(0.92); opacity: 0.9; } to { transform: scale(1.55); opacity: 0; } }
 
   /* the gradient ring is awake while it listens and while it talks */
@@ -884,7 +890,16 @@
   .bar.is-speaking .bar__glow { opacity: 0.5; }
   @keyframes listen-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
 
-  /* short notes about voice (what it heard, what went wrong) appear just above the suggestions */
+  /* questions that were spoken carry a small microphone mark */
+  .ask--voice {
+    padding-left: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3.5' width='6' height='10.5' rx='3'/%3E%3Cpath d='M5.8 11.5a6.2 6.2 0 0 0 12.4 0M12 17.7v2.8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 13px 50%;
+    background-size: 15px 15px;
+  }
+
+  /* short notes about voice (what it needs, what went wrong) appear just above the suggestions */
   .toast {
     max-width: min(100%, 560px);
     margin: 0 4px 2px;
@@ -1014,6 +1029,7 @@
   @media (prefers-reduced-motion: reduce) {
     .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path, .toast { animation: none; }
     .bar.is-listening .mic::after { animation: none; opacity: 0.8; }
+    .bar.wants-answer:not(.is-listening) .mic::after { animation: none; opacity: 0.7; }
     .bar.is-listening .bar__glow { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
@@ -1077,9 +1093,10 @@
           </svg>
         </button>
         <button class="mic" id="mic" type="button" aria-pressed="false" aria-label="Talk instead of typing">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg class="wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.8 11.5a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.7v2.8"/>
           </svg>
+          <svg class="stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="7.5" width="9" height="9" rx="2.2" fill="currentColor"/></svg>
         </button>
       </div>
 
@@ -1458,6 +1475,7 @@
         return changed;
       },
       help: "I can change the day, the time of day, or switch to video. Try Thursday afternoon. Say confirm when it looks right.",
+      readback: () => `${doc.name}, ${fmt(days[st.day], { weekday: "long" })} at ${SLOTS[st.day][st.slot]}, ${st.video ? "by video" : "in person"}. You pay ${money(cost())}. Is that right?`,
       costLine: () => `This visit would cost you ${money(cost())}. ${free() ? "Yearly checkups and vaccines are $0 with your plan." : "That is your copay."} Say confirm when it looks right.`,
       confirm: () => confirmBtn.click(),
       skip: () => $("[data-skip]", m.el).click(),
@@ -1759,6 +1777,7 @@
         return changed;
       },
       help: "I can make it a 90 day supply or send it by mail. Say confirm when it looks right.",
+      readback: () => `A ${st.supply} day supply, ${st.how === "pickup" ? "for pick up" : "sent by mail"}, for ${money(cost())}. Is that right?`,
       confirm: () => confirmBtn.click(),
       skip: () => $("[data-skip]", m.el).click(),
     };
@@ -1804,6 +1823,7 @@
     const draft = {
       kind: "call", open: true, el: m.el,
       help: "Pick a time on the card, then say confirm and I will request the call.",
+      readback: () => `A call back, ${st.when.toLowerCase()}. Is that right?`,
       confirm: () => $("[data-confirm]", m.el).click(),
       skip: () => $("[data-skip]", m.el).click(),
     };
@@ -2039,15 +2059,30 @@
   const whole = (words) => new RegExp("^(please )?(" + words + ")(( and)?[ ,.!]+(" + words + "|please|thanks|thank you|it|that))*[ .!]*$");
   const YES = whole("yes|yep|yeah|sure|ok|okay|confirm|confirm it|book it|book that|schedule it|order it|looks good|do it|go ahead|that works|sounds good|perfect");
   const NO = whole("no|nope|cancel|cancel it|never ?mind|not now|stop|forget it|do not book it|don.?t book it|do not order it|don.?t order it");
-  function readEdit(text) {
+  // Spoken words can be misheard, so by voice a draft is never committed on one word:
+  // "confirm" makes it read the details back and ask "Is that right?", and only a clear yes after that commits.
+  const VOICE_YES = whole("yes|yes it is|yep|yeah|correct|right|that is right|that.?s right|it is");
+  const VOICE_NO = whole("no|nope|not right|wrong|that is wrong|that.?s wrong|cancel|stop|wait");
+  function readEdit(text, viaVoice) {
     const d = activeDraft;
     if (!d || !d.open || !d.el.isConnected) return null;
     let t = text.toLowerCase().trim();
-    if (YES.test(t)) return { act: "confirm" };
-    if (NO.test(t)) return { act: "skip" };
+    const decide = () => {
+      if (viaVoice && d.asked) {
+        if (VOICE_YES.test(t)) return { act: "confirm" };
+        if (VOICE_NO.test(t)) return { act: "keep" };
+        return null;
+      }
+      if (YES.test(t)) return { act: viaVoice ? "readback" : "confirm" };
+      if (NO.test(t)) return { act: "skip" };
+      return null;
+    };
+    let hit = decide();
+    if (hit) return hit;
     t = t.replace(/^(yes|yep|yeah|sure|ok|okay)\b[\s,.!]*(but\s+)?/, "");      // drop a leading "ok," and read the rest
-    if (YES.test(t)) return { act: "confirm" };
-    if (NO.test(t)) return { act: "skip" };
+    hit = decide();
+    if (hit) return hit;
+    d.asked = false;                             // anything else is a change or a new request, so the question is off
     const lost = () => (understand(text).unknown ? { act: "help" } : null);      // keep the draft when the message means nothing else
     if (d.kind === "refill") {
       const patch = {};
@@ -2086,16 +2121,25 @@
   }
 
   // a short exchange about the card that is already on screen (no new card)
-  async function editInPlace(text, edit) {
+  async function editInPlace(text, edit, viaVoice) {
     const d = activeDraft, turn = d.el.closest(".turn") || flow.lastElementChild;
     busy = true;
     try {
     const q = document.createElement("div");
-    q.className = "ask"; q.style.marginTop = "18px"; q.textContent = text;
+    q.className = viaVoice ? "ask ask--voice" : "ask"; q.style.marginTop = "18px"; q.textContent = text;
     turn.appendChild(q);
     face.sent(q);
     const glide = reduceMotion.matches ? "auto" : "smooth";
-    if (edit.act === "help" || edit.act === "tell") {
+    if (edit.act === "readback" || edit.act === "keep") {
+      // by voice: read the details back and wait for a clear yes, or step back from that question
+      d.asked = edit.act === "readback";
+      const line = d.asked ? d.readback() : "Okay. Nothing is done yet. Tell me what to change.";
+      d.el.scrollIntoView({ block: "nearest", behavior: glide });
+      voice.say(line);
+      await speak(turn, line, "say--after");
+      turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
+      statusEl.textContent = line;
+    } else if (edit.act === "help" || edit.act === "tell") {
       const line = edit.act === "tell" ? edit.line : d.help;
       voice.say(line);
       await speak(turn, line, "say--after");
@@ -2136,13 +2180,14 @@
     };
   }
 
-  async function ask(raw) {
+  async function ask(raw, how) {
     const text = String(raw || "").trim();
     if (!text || busy) return false;
+    const viaVoice = how === "voice";
     voice.hush();                                                          // a new request stops anything being read aloud
     if (window.matchMedia("(pointer: coarse)").matches) input.blur();     // on phones, put the keyboard away so the card has room
-    const edit = isUrgent(text) ? null : readEdit(text);   // safety always wins over an open draft
-    if (edit) return editInPlace(text, edit);
+    const edit = isUrgent(text) ? null : readEdit(text, viaVoice);   // safety always wins over an open draft
+    if (edit) return editInPlace(text, edit, viaVoice);
     busy = true;
     setThinking(true);                                // visual only: the gradient ring comes alive while the answer is made
     try {
@@ -2153,7 +2198,7 @@
     const turn = document.createElement("article");
     turn.className = "turn";
     const q = document.createElement("div");
-    q.className = "ask";
+    q.className = viaVoice ? "ask ask--voice" : "ask";
     q.textContent = text;
     turn.appendChild(q);
     flow.appendChild(turn);
@@ -2170,7 +2215,7 @@
     await wait(pace(rand(320, 520)));
     // in voice mode the sentence is also read aloud. A draft adds what the member can say next.
     const isDraft = (spec.ui || []).some((u) => u.type === "schedule" || u.type === "refill" || u.type === "handoff");
-    voice.say(spec.say + (isDraft ? " Say confirm, or tell me what to change." : ""));
+    voice.say(spec.say + (isDraft ? " Tell me what to change, or say confirm." : ""));
     await Promise.race([speak(turn, spec.say), wait(pace(380))]);     // the card starts while the sentence is still arriving
     let last = null;
     for (const ui of spec.ui || []) last = (await mount(turn, ui)) || last;
@@ -2514,13 +2559,19 @@
      Talk instead of typing, and hear the answer.
      Listening uses the browser's speech service (SpeechRecognition).
      Speaking uses the built-in voices (speechSynthesis).
-     Nothing here needs a server of ours. In a real health product you
-     would swap both for a speech service you have a privacy agreement with.
+     Nothing here needs a server of ours. A real health product should not
+     send member speech through a browser's consumer speech service. It would
+     use on-device recognition or a speech provider under a privacy agreement.
+
      Rules this follows:
-       - voice never does more than typing can do. "Confirm" still has to be said or tapped
-       - safety words win, exactly as they do for typed text
+       - voice never does more than typing, and is stricter: by voice a draft is read back
+         and needs a clear yes before it is committed. Paying is by tap only
+       - safety words win, exactly as they do for typed text, and are checked while listening
+       - it never listens while it is talking, so it cannot hear itself
        - answers are only read aloud after the member has spoken, and can be switched off
        - everything spoken is also on screen, and everything heard is shown as text
+       - every phone is different, so it tries, watches the clock, and falls back to the
+         microphone key on the keyboard when the browser will not listen
      ========================================================= */
 
   const voice = (() => {
@@ -2528,33 +2579,45 @@
     const synth = window.speechSynthesis;
     const canSpeak = !!(synth && window.SpeechSynthesisUtterance);
     const micBtn = $("#mic"), toastEl = $("#toast"), toggleBtn = $("#voiceToggle");
+    // iPhones and iPads need extra care: their voice list is unreliable, and listening right after speaking can go deaf
+    const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
     const SAY = {
-      none: "Voice typing is not available in this browser. Tap the text box and use the microphone on your keyboard.",
-      blocked: "I could not use the microphone. Check that it is allowed for this page, or tap the text box and use the microphone on your keyboard.",
-      quiet: "I did not hear anything. Tap the microphone and try again.",
-      nomic: "No microphone was found on this device.",
+      keyboard: "Voice typing is not available here. Tap the text box and use the microphone key on your keyboard.",
+      blocked: "I could not use the microphone. Check that it is allowed, or tap the text box and use the microphone key on your keyboard.",
+      miss1: "Sorry, I did not catch that. Tap the microphone and try again.",
+      miss2: "I still did not get it. You can type it, or tap one of the suggestions.",
+      nomic: "I could not reach the microphone just now. Please try again.",
       offline: "Voice needs the internet right now. Please type instead.",
       oops: "Voice stopped working for a moment. Please try again, or type instead.",
-      first: "Voice uses your browser's speech service to turn what you say into text.",
+      answer: "Tap the microphone to answer.",
+      first: "Your browser's speech service turns your voice into text. This prototype does not save it. Please do not say real health details.",
+      aloud: "I will read answers out loud when you talk to me. Tap the speaker at the top to turn that off.",
+      silent: "No sound? Check the silent switch on the side of your phone.",
     };
 
     let rec = null;                 // the speech recognizer while it is listening
-    let listening = false, speaking = false;
+    let listening = false, speaking = false, started = false;
     let heard = "";                 // the words so far
     let cancelled = false, failed = false, auto = false;
-    let quietTimer = 0, deafTimer = 0, capTimer = 0, endTimer = 0, toastTimer = 0, speakTimer = 0;
+    let quietTimer = 0, deafTimer = 0, capTimer = 0, endTimer = 0, startTimer = 0, toastTimer = 0, speakTimer = 0, gapTimer = 0;
     let voiceMode = false;          // true after the member speaks, false after they type
-    let autoOk = true;              // false once the browser refuses to listen without a tap
+    let autoOk = !apple;            // listening by itself after a spoken question. Off on iPhone until proven on a device
     let autoMisses = 0;             // times it listened by itself and heard nothing
+    let misses = 0;                 // times in a row the member tapped the mic and nothing was heard
+    let refused = false;            // the browser said speech recognition is not allowed here at all
     let primed = false, current = null;
     let wantListen = false;         // it finished speaking a question while the card was still being built
-    let repliesOn = true;
-    try { repliesOn = localStorage.getItem("ma-spoken-replies") !== "off"; } catch (err) { /* private mode */ }
-    let noted = false;
-    try { noted = localStorage.getItem("ma-voice-note") === "1"; } catch (err) { /* private mode */ }
+    let spokeEnd = 0;               // when it last stopped talking
+    let repliesOn = true, noted = false, toldAloud = false, toldSilent = false;
+    const recall = (key) => { try { return localStorage.getItem(key); } catch (err) { return null; } };
+    const remember = (key, value) => { try { localStorage.setItem(key, value); } catch (err) { /* private mode */ } };
+    repliesOn = recall("ma-spoken-replies") !== "off";
+    noted = recall("ma-voice-note") === "1";
+    toldAloud = recall("ma-voice-aloud") === "1";
+    toldSilent = recall("ma-voice-silent") === "1";
 
-    function toast(text, ms = 6000) {
+    function toast(text, ms = 6500) {
       clearTimeout(toastTimer);
       toastEl.textContent = text;
       toastEl.hidden = false;
@@ -2562,9 +2625,17 @@
     }
     function clearToast() { clearTimeout(toastTimer); toastEl.hidden = true; toastEl.textContent = ""; }
 
-    function showToggle() {
+    function showControls() {
       toggleBtn.setAttribute("aria-pressed", String(repliesOn));
       toggleBtn.setAttribute("aria-label", repliesOn ? "Spoken replies are on" : "Spoken replies are off");
+      micBtn.setAttribute("aria-pressed", String(listening));
+      micBtn.setAttribute("aria-label", listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk instead of typing");
+    }
+
+    // when the browser will not listen, the keyboard's own microphone key still types into the box
+    function useKeyboard(message) {
+      toast(message, 9000);
+      input.focus();
     }
 
     /* ---- listening ---- */
@@ -2572,57 +2643,68 @@
     function setListening(on) {
       listening = on;
       bar.classList.toggle("is-listening", on);
+      if (on) bar.classList.remove("wants-answer");
       if (!on) bar.classList.remove("is-hearing");
-      micBtn.setAttribute("aria-pressed", String(on));
-      micBtn.setAttribute("aria-label", on ? "Stop listening" : "Talk instead of typing");
-      if (on) { input.placeholder = "Listening..."; ringWake(); ringPace(2); }
+      if (on) { input.placeholder = started ? "Listening..." : "Starting the microphone..."; ringWake(); ringPace(2); }
       else { input.placeholder = activeDraft && activeDraft.set ? "Tell me what to change" : "Ask anything"; ringPace(1); ringSleep(); }
       face.voice(on ? "listening" : speaking ? "talking" : "");
+      showControls();
     }
 
-    function clearTimers() { [quietTimer, deafTimer, capTimer, endTimer].forEach(clearTimeout); }
+    function clearTimers() { [quietTimer, deafTimer, capTimer, endTimer, startTimer, gapTimer].forEach(clearTimeout); }
 
     function listen(byItself = false) {
       if (listening || busy) return;
       hush();
-      if (!Recognition) {
-        if (!byItself) { toast(SAY.none, 8000); input.focus(); }
+      if (!Recognition || refused) {
+        if (!byItself) useKeyboard(SAY.keyboard);
         return;
       }
       prime();
-      heard = ""; cancelled = false; failed = false; auto = byItself;
+      heard = ""; cancelled = false; failed = false; started = false; auto = byItself;
       try {
-        rec = new Recognition();
+        rec = new Recognition();              // a fresh one every time. Reusing one is unreliable on phones
         rec.lang = "en-US";
         rec.interimResults = true;
         rec.continuous = false;
         rec.maxAlternatives = 1;
+        rec.onstart = onStart;
         rec.onresult = onResult;
         rec.onerror = onError;
         rec.onend = onEnd;
         rec.start();
       } catch (err) {
         rec = null;
-        if (byItself) autoOk = false; else { toast(SAY.blocked, 8000); input.focus(); }
+        if (byItself) autoOk = false; else useKeyboard(SAY.blocked);
         return;
       }
       setListening(true);
-      if (!byItself && !noted) {
-        noted = true;
-        try { localStorage.setItem("ma-voice-note", "1"); } catch (err) { /* private mode */ }
-        toast(SAY.first, 7000);
-      } else clearToast();
+      if (!byItself && !noted) { noted = true; remember("ma-voice-note", "1"); toast(SAY.first, 9000); }
+      else if (!byItself) clearToast();      // a tap clears old notes. Listening by itself leaves them to be read
       clearTimers();
-      deafTimer = setTimeout(() => { if (listening && !heard) finish(); }, 8000);     // nothing heard: give up politely
-      capTimer = setTimeout(() => { if (listening) finish(); }, 30000);               // never keep the mic open for long
+      // the phone may first ask for permission. Give that 20 seconds before giving up
+      startTimer = setTimeout(() => { if (listening && !started) finish(); }, 20000);
+      capTimer = setTimeout(() => { if (listening) finish(); }, 45000);               // never keep the mic open for long
+    }
+
+    // the microphone is really open now (any permission box has been answered)
+    function onStart() {
+      if (!rec || started) return;
+      started = true;
+      clearTimeout(startTimer);
+      input.placeholder = "Listening...";
+      clearTimeout(deafTimer);
+      deafTimer = setTimeout(() => { if (listening && !heard) finish(); }, auto ? 6000 : 8000);   // nothing heard: stop politely
     }
 
     function onResult(e) {
+      if (performance.now() - spokeEnd < 400) return;        // too soon after it spoke: it may be hearing itself
+      if (!started) onStart();
       let text = "";
       for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
       text = text.replace(/\s+/g, " ").trim();
       if (!text) return;
-      heard = text;
+      heard = text;                          // keep the latest words. Some phones never mark them as final
       input.value = text;                    // what it hears is shown as it arrives
       syncBar();
       input.scrollLeft = input.scrollWidth;
@@ -2630,16 +2712,20 @@
       face.heard();
       clearTimeout(deafTimer);
       clearTimeout(quietTimer);
-      quietTimer = setTimeout(finish, 1700); // 1.7 seconds of quiet means the member is done
+      if (isUrgent(text)) { finish(); return; }               // an emergency is acted on at once
+      quietTimer = setTimeout(finish, 2000); // two seconds of quiet means the member is done. No rush
     }
 
     function onError(e) {
       const code = e && e.error;
-      if (code === "aborted" || cancelled) return;
+      if (code === "aborted" || cancelled) return;            // phones also report plain silence as "aborted"
       failed = true;
-      if (code === "not-allowed" || code === "service-not-allowed") {
-        if (auto) autoOk = false; else { toast(SAY.blocked, 8000); }
-      } else if (code === "no-speech") { if (!auto) toast(SAY.quiet); else autoMisses++; }
+      if (code === "service-not-allowed") {
+        refused = true;                                       // it will not work in this app or with these settings
+        if (!auto) useKeyboard(SAY.keyboard); else autoOk = false;
+      } else if (code === "not-allowed") {
+        if (auto) autoOk = false; else useKeyboard(SAY.blocked);
+      } else if (code === "no-speech") { failed = false; }    // handled as a miss when it ends
       else if (code === "audio-capture") toast(SAY.nomic);
       else if (code === "network") toast(SAY.offline);
       else if (!auto) toast(SAY.oops);
@@ -2656,7 +2742,7 @@
     function onEnd() {
       if (!rec) return;                      // already handled
       clearTimers();
-      rec.onresult = rec.onerror = rec.onend = null;
+      rec.onstart = rec.onresult = rec.onerror = rec.onend = null;
       rec = null;
       const text = heard;
       heard = "";
@@ -2667,14 +2753,19 @@
       if (cancelled) return;
       if (text) {
         voiceMode = true;
-        autoMisses = 0;
+        autoMisses = 0; misses = 0;
         app.classList.add("has-voice");
-        showToggle();
+        showControls();
         clearToast();
-        ask(text);
-      } else if (!failed) {
-        if (auto) autoMisses++; else toast(SAY.quiet);
+        ask(text, "voice");
+        return;
       }
+      if (failed) return;                    // a message is already showing
+      if (auto) { autoMisses++; bar.classList.add("wants-answer"); toast(SAY.answer, 5000); return; }
+      misses++;
+      if (misses >= 2) {                     // two misses in a row: offer the other ways, do not keep asking
+        if (apple) useKeyboard(SAY.keyboard); else toast(SAY.miss2, 8000);
+      } else toast(SAY.miss1);
     }
 
     // stop without sending anything
@@ -2692,90 +2783,134 @@
     function prime() {
       if (primed || !canSpeak) return;
       primed = true;
-      try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); } catch (err) { /* no voices */ }
+      try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; u.lang = "en-US"; synth.speak(u); } catch (err) { /* no voices */ }
     }
 
+    // On iPhone the system picks the voice for the language (its list can hold joke voices and loads late).
+    // Elsewhere prefer a few known good voices, then any voice that lives on the device. Never just "the first one".
     function pickVoice() {
+      if (apple) return null;
       let all = [];
       try { all = synth.getVoices() || []; } catch (err) { return null; }
-      const english = all.filter((v) => /^en[-_]US/i.test(v.lang));
-      const pool = english.length ? english : all.filter((v) => /^en/i.test(v.lang));
-      const liked = ["Samantha", "Ava", "Allison", "Zoe", "Google US English", "Aria", "Jenny"];
-      for (const name of liked) { const hit = pool.find((v) => v.name.indexOf(name) >= 0); if (hit) return hit; }
-      return pool[0] || null;
+      const pool = all.filter((v) => /^en[-_]US/i.test(v.lang));
+      for (const name of ["Samantha", "Google US English", "Aria", "Jenny"]) {
+        const hit = pool.find((v) => v.name.indexOf(name) >= 0);
+        if (hit) return hit;
+      }
+      return pool.find((v) => v.localService) || null;
+    }
+
+    // the voice reads plain words better than short forms
+    const LONG = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday",
+      Jan: "January", Feb: "February", Mar: "March", Apr: "April", Jun: "June", Jul: "July", Aug: "August", Sep: "September", Oct: "October", Nov: "November", Dec: "December" };
+    function toSpeech(text) {
+      return String(text)
+        .replace(/\bDr\.\s/g, "Doctor ")
+        .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b(?!\w)/g, (m) => LONG[m])
+        .replace(/\s·\s/g, ", ")
+        .replace(/\s+/g, " ")
+        .trim();
     }
 
     function setSpeaking(on) {
       speaking = on;
       bar.classList.toggle("is-speaking", on);
-      if (on) ringWake(); else ringSleep();
+      if (on) { bar.classList.remove("wants-answer"); ringWake(); } else ringSleep();
       if (!listening) face.voice(on ? "talking" : "");
+      showControls();
     }
 
+    // reading aloud is a nice extra. If it ever fails, the answer on screen must not be affected
     function say(text) {
+      try { return sayNow(text); }
+      catch (err) { current = null; clearTimeout(speakTimer); if (speaking) setSpeaking(false); return false; }
+    }
+
+    function sayNow(text) {
       if (!voiceMode || !repliesOn || !canSpeak || !text) return false;
+      if (listening) stopListening();        // never talk and listen at the same time
       clearTimeout(speakTimer);
-      try { synth.cancel(); } catch (err) { /* nothing to stop */ }
-      const u = new SpeechSynthesisUtterance(text);
+      clearTimeout(gapTimer);
+      const u = new SpeechSynthesisUtterance(toSpeech(text));
       u.lang = "en-US";
       u.rate = 1.02;
       const v = pickVoice();
-      if (v) u.voice = v;
+      if (v) { try { u.voice = v; } catch (err) { /* keep the default voice */ } }
       const done = () => {
         if (current !== u) return;
         current = null;
         clearTimeout(speakTimer);
+        spokeEnd = performance.now();
         setSpeaking(false);
         wantListen = true;
         listenAgain();
       };
       u.onend = done;
       u.onerror = done;
-      current = u;
+      current = u;                           // keep hold of it so the browser does not drop it mid sentence
       wantListen = false;
       setSpeaking(true);
       speakTimer = setTimeout(done, 5000 + text.length * 110);     // in case the end is never reported
-      try { synth.speak(u); } catch (err) { done(); }
+      // stopping and starting in the same breath can swallow the new sentence on Safari, so leave a short gap
+      let gap = 0;
+      try { if (synth.speaking || synth.pending) { synth.cancel(); gap = 120; } } catch (err) { /* nothing to stop */ }
+      const go = () => { if (current === u) { try { synth.speak(u); } catch (err) { done(); } } };
+      if (gap) setTimeout(go, gap); else go();
+      if (!toldAloud) { toldAloud = true; remember("ma-voice-aloud", "1"); toast(SAY.aloud, 8000); }
+      else if (apple && !toldSilent) { toldSilent = true; remember("ma-voice-silent", "1"); toast(SAY.silent, 7000); }
       return true;
     }
 
     function hush() {
       clearTimeout(speakTimer);
+      clearTimeout(gapTimer);
       current = null;
       wantListen = false;
-      if (canSpeak) { try { synth.cancel(); } catch (err) { /* nothing to stop */ } }
-      if (speaking) setSpeaking(false);
+      if (canSpeak) { try { if (synth.speaking || synth.pending) synth.cancel(); } catch (err) { /* nothing to stop */ } }
+      if (speaking) { spokeEnd = performance.now(); setSpeaking(false); }
     }
 
-    // after it asks for a confirm out loud, it listens for the answer by itself (once), so the member can just say it
+    // After it asks something out loud about a draft, the member will want to answer.
+    // Where the browser allows it, listen once by itself after a short gap. Otherwise the mic pulses to invite a tap.
     function listenAgain() {
       if (!wantListen || speaking || busy || listening) return;      // if the card is still being built, afterTurn() tries again
       wantListen = false;
-      if (!voiceMode || !autoOk || autoMisses > 0 || document.hidden) return;
+      if (!voiceMode || document.hidden) return;
       if (!activeDraft || !activeDraft.open) return;
-      listen(true);
+      if (!autoOk || autoMisses > 0) { bar.classList.add("wants-answer"); return; }
+      clearTimeout(gapTimer);
+      gapTimer = setTimeout(() => { if (!speaking && !busy && !listening && activeDraft && activeDraft.open) listen(true); }, 350);
     }
 
     /* ---- controls ---- */
 
-    micBtn.addEventListener("click", () => { if (listening) finish(); else { autoMisses = 0; listen(false); } });
+    // click, not touch start: phones only allow the microphone from a finished tap
+    micBtn.addEventListener("click", () => {
+      if (listening) { finish(); return; }
+      if (speaking && (!Recognition || refused)) { hush(); return; }     // nothing to listen with: the button just stops the talking
+      autoMisses = 0;
+      listen(false);                          // this also stops anything being read aloud
+    });
     toggleBtn.addEventListener("click", () => {
       repliesOn = !repliesOn;
-      try { localStorage.setItem("ma-spoken-replies", repliesOn ? "on" : "off"); } catch (err) { /* private mode */ }
+      remember("ma-spoken-replies", repliesOn ? "on" : "off");
       if (!repliesOn) hush();
-      showToggle();
+      showControls();
       toast(repliesOn ? "Spoken replies are on." : "Spoken replies are off. Answers are still shown.", 3500);
     });
     input.addEventListener("input", hush);                                   // typing stops anything being read aloud
-    document.addEventListener("visibilitychange", () => { if (document.hidden) { stopListening(); hush(); } });
-    showToggle();
+    const leave = () => { stopListening(); hush(); };
+    document.addEventListener("visibilitychange", () => { if (document.hidden) leave(); });
+    window.addEventListener("pagehide", leave);
+    if (canSpeak) { try { synth.getVoices(); } catch (err) { /* voices load later */ } }   // ask early so the list is ready for the first reply
+    showControls();
 
     return {
       say,
       hush,
-      typed() { voiceMode = false; hush(); },
+      typed() { voiceMode = false; bar.classList.remove("wants-answer"); hush(); },
+      cancel() { bar.classList.remove("wants-answer"); stopListening(); hush(); },
       afterTurn: listenAgain,                    // called when an answer has finished arriving
-      cancel() { stopListening(); hush(); },
       busy: () => listening || speaking,
     };
   })();

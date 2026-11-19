@@ -1,0 +1,1076 @@
+<!doctype html>
+<!--
+  Chat input bar with a living green avatar. One file, no dependencies, no network.
+
+  DESIGN TOKENS
+  page background ....... #0b0b0d
+  bar surface ........... #121212, lifting to about #212121 at the inner edge all the way round
+  bar outline ........... 1px, reads as about #3a (white at 9.5% over the inner glow)
+  bar inner glow ........ rgba(255,255,255,0.15) blurred over 0.24 H, all the way round
+  bar height (H) ........ 64px desktop, 58px up to 520px wide, 54px up to 350px wide
+  bar corner radius ..... 0.33 H (21px, 19px, 18px)
+  bar max width ......... 640px, side gutter 16px / 12px / 10px
+  home icon ............. 24px, pure white, filled, in a 44px touch target
+  text .................. 16px system font, ink #f3f5f4, placeholder #868a88
+  avatar (canvas) ....... solid for 1.0 H from the right edge, soft edge is a circle of
+                          radius 0.9 H centered 0.22 H from the right edge, fade about 0.3 H wide
+  green: light spot ..... #8ef0b0   (0.5 H in from the right, 0.2 H down)
+  green: middle ......... #3acb78
+  green: right side ..... #2fb96a
+  green: bottom ......... #14964b
+  green: soft edge ...... #128a50, fading through #17573c and #13271e into the bar
+  eyes .................. #effcf3 to #e2f8ea, white highlight, mint rim light #a5ffd0
+  eye size .............. height 0.45 H, widths 0.26 H and 0.385 H in the resting pose, gap 0.085 H
+  focus ring ............ #7dffb5, caret #4fdc8f
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0b0d">
+<title>Chat bar</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --page: #0b0b0d;
+    --bar: #121212;
+    --ink: #f3f5f4;
+    --soft: #c9cfcb;
+    --dim: #868a88;
+    --g-light: #8ef0b0;
+    --g-mid: #3acb78;
+    --g-deep: #14964b;
+    --focus: #7dffb5;
+    --H: 64px;
+    --R: calc(var(--H) * 0.33);
+    --gutter: 16px;
+    --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (max-width: 520px) { :root { --H: 58px; --gutter: 12px; } }
+  @media (max-width: 350px) { :root { --H: 54px; --gutter: 10px; } }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font-family: var(--font);
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sr {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
+
+  /* The app box always matches the visible viewport, so the bar rides above the keyboard. */
+  .app {
+    position: fixed; left: 0; right: 0; top: 0;
+    height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  @supports (height: 100dvh) { .app { height: 100dvh; } }
+
+  /* ---------- message thread ---------- */
+  .thread {
+    flex: 1 1 auto; min-height: 0;
+    overflow-x: hidden; overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: calc(28px + env(safe-area-inset-top, 0px))
+             max(var(--gutter), env(safe-area-inset-right, 0px))
+             14px
+             max(var(--gutter), env(safe-area-inset-left, 0px));
+    -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 40px);
+            mask-image: linear-gradient(180deg, transparent 0, #000 40px);
+    scrollbar-width: thin;
+    scrollbar-color: #232527 transparent;
+  }
+  .log {
+    max-width: 640px; min-height: 100%;
+    margin: 0 auto;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    gap: 12px;
+  }
+  .msg { display: flex; min-width: 0; }
+  .msg .bubble {
+    margin: 0;
+    font: 400 15px/1.45 var(--font);
+    overflow-wrap: anywhere;
+  }
+  .msg.me { justify-content: flex-end; padding-left: 12%; }
+  .msg.me .bubble {
+    padding: 9px 14px;
+    border-radius: 18px 18px 6px 18px;
+    background: #161718;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    color: #eef1ef;
+  }
+  .msg.bot { gap: 10px; align-items: flex-start; padding-right: 12%; }
+  .msg.bot .bubble { padding: 2px 0; color: var(--soft); }
+  .msg .dot {
+    flex: none; width: 8px; height: 8px; margin-top: 9px; border-radius: 50%;
+    background: radial-gradient(circle at 42% 30%, var(--g-light), var(--g-mid) 55%, var(--g-deep));
+    box-shadow: 0 0 10px rgba(58, 203, 120, 0.4);
+  }
+  .msg.typing { align-items: center; min-height: 26px; }
+  .msg.typing .dot { margin-top: 0; }
+  .msg.typing[hidden] { display: none; }
+  .dots { display: inline-flex; gap: 5px; align-items: center; }
+  .dots i {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--g-mid); opacity: 0.35;
+    animation: think 1.1s ease-in-out infinite;
+  }
+  .dots i:nth-child(2) { animation-delay: 0.16s; }
+  .dots i:nth-child(3) { animation-delay: 0.32s; }
+  .dots b { margin-left: 4px; font: 400 13px/1 var(--font); color: var(--dim); }
+  @keyframes think {
+    0%, 70%, 100% { opacity: 0.3; transform: translateY(0); }
+    35% { opacity: 1; transform: translateY(-2px); }
+  }
+  .msg.in { animation: rise 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- dock and bar ---------- */
+  .dock {
+    flex: none;
+    padding: 6px
+             max(var(--gutter), env(safe-area-inset-right, 0px))
+             max(12px, env(safe-area-inset-bottom, 0px))
+             max(var(--gutter), env(safe-area-inset-left, 0px));
+  }
+  @media (min-width: 700px) and (min-height: 560px) { .dock { padding-bottom: 28px; } }
+  .kb .dock { padding-bottom: 8px; }
+
+  .bar {
+    position: relative;
+    isolation: isolate;
+    display: flex; align-items: center;
+    height: var(--H);
+    max-width: 640px;
+    margin: 0 auto;
+    border-radius: var(--R);
+    background: var(--bar);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 18px 44px -14px rgba(0, 0, 0, 0.75);
+    transition: box-shadow 0.18s ease;
+  }
+  /* faint lighter band along the top and bottom, and a soft inner rim all the way round */
+  .bar::before {
+    content: ""; position: absolute; inset: 0; z-index: 0;
+    border-radius: inherit; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.012), rgba(255, 255, 255, 0) calc(var(--H) * 0.2));
+    box-shadow: inset 0 0 calc(var(--H) * 0.24) rgba(255, 255, 255, 0.15);
+  }
+  /* thin soft outline, drawn above the avatar so it runs round the whole bar */
+  .bar::after {
+    content: ""; position: absolute; inset: 0; z-index: 4;
+    border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.095), inset 0 0 2px rgba(255, 255, 255, 0.05);
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--H) * 1.3), rgba(0, 0, 0, 0.85) calc(100% - var(--H) * 0.9));
+            mask-image: linear-gradient(90deg, #000 calc(100% - var(--H) * 1.3), rgba(0, 0, 0, 0.85) calc(100% - var(--H) * 0.9));
+    transition: box-shadow 0.18s ease;
+  }
+  .bar.is-focus::after {
+    box-shadow: inset 0 0 0 1px rgba(125, 255, 181, 0.5), inset 0 0 2px rgba(125, 255, 181, 0.2);
+  }
+  .bar.is-focus {
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 0 4px rgba(58, 203, 120, 0.1), 0 18px 44px -14px rgba(0, 0, 0, 0.75);
+  }
+
+  .face {
+    position: absolute; right: 0; top: 0; z-index: 1;
+    width: calc(var(--H) * 1.9); height: 100%;
+    border-radius: 0 var(--R) var(--R) 0;
+    pointer-events: none;
+  }
+
+  .home {
+    position: relative; z-index: 2;
+    flex: none;
+    width: 44px; height: 44px;
+    margin-left: calc(var(--H) * 0.3 - 6px);
+    padding: 0; border: 0; border-radius: 13px;
+    background: transparent; color: #fff;
+    display: grid; place-items: center;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background-color 0.15s ease, transform 0.12s ease;
+  }
+  .home svg { display: block; width: 24px; height: 24px; }
+  @media (hover: hover) { .home:hover { background: rgba(255, 255, 255, 0.07); } }
+  .home:active { transform: scale(0.93); }
+
+  .field {
+    position: relative; z-index: 2;
+    flex: 1 1 auto; min-width: 0;
+    height: 44px;
+    margin: 0 calc(var(--H) * 1.33) 0 2px;
+    padding: 0 16px 0 6px;
+    border: 0; border-radius: 10px; outline: 0;
+    background: transparent;
+    color: var(--ink);
+    caret-color: #4fdc8f;
+    font: 400 16px/1.25 var(--font);
+    letter-spacing: 0;
+    -webkit-appearance: none; appearance: none;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
+            mask-image: linear-gradient(90deg, #000 calc(100% - 16px), transparent);
+  }
+  .field::placeholder { color: var(--dim); opacity: 1; }
+  .field::selection { background: rgba(58, 203, 120, 0.38); }
+
+  .send {
+    position: absolute; right: 0; top: 0; bottom: 0; z-index: 3;
+    width: calc(var(--H) * 1.14);
+    padding: 0; border: 0;
+    border-radius: var(--R);
+    background: transparent;
+    cursor: default;
+    touch-action: manipulation;
+  }
+  .bar.has-text .send { cursor: pointer; }
+
+  .home:focus-visible, .send:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+  .home:focus-visible { outline-offset: 0; }
+
+  .hint {
+    max-width: 640px;
+    margin: 8px auto 0;
+    min-height: 16px;
+    font: 400 12px/16px var(--font);
+    color: #7c817e;
+    text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .msg.in, .dots i { animation: none; }
+    .dots i { opacity: 0.8; }
+    .home, .bar, .bar::after { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <main class="thread" id="thread" tabindex="-1">
+    <div class="log" id="log" role="log" aria-live="polite" aria-relevant="additions" aria-label="Messages"></div>
+  </main>
+
+  <div class="dock">
+    <form class="bar" id="composer" autocomplete="off" novalidate>
+      <canvas class="face" id="face" aria-hidden="true"></canvas>
+
+      <button class="home" id="home" type="button" aria-label="Home. Start a new chat.">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M12.83 3.32 19.89 9.42Q20.8 10.2 20.8 11.4V19.7Q20.8 21.4 19.1 21.4H15Q14.6 21.4 14.6 21V14.3Q14.6 13.5 13.8 13.5H10.2Q9.4 13.5 9.4 14.3V21Q9.4 21.4 9 21.4H4.9Q3.2 21.4 3.2 19.7V11.4Q3.2 10.2 4.11 9.42L11.17 3.32Q12 2.6 12.83 3.32Z"/>
+        </svg>
+      </button>
+
+      <label class="sr" for="msg">Message</label>
+      <input class="field" id="msg" name="message" type="text" placeholder="Type a message"
+             autocomplete="off" autocapitalize="sentences" enterkeyhint="send" maxlength="600"
+             aria-describedby="hint">
+
+      <button class="send" id="send" type="submit" aria-label="Send message" aria-disabled="true"></button>
+    </form>
+    <p class="hint" id="hint">Demo chat. Replies are pre-written.</p>
+    <p class="sr" id="status" role="status"></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var d = document;
+  var app = d.getElementById('app');
+  var thread = d.getElementById('thread');
+  var log = d.getElementById('log');
+  var statusEl = d.getElementById('status');
+  var bar = d.getElementById('composer');
+  var input = d.getElementById('msg');
+  var sendBtn = d.getElementById('send');
+  var homeBtn = d.getElementById('home');
+  var hint = d.getElementById('hint');
+  var canvas = d.getElementById('face');
+  var ctx = canvas.getContext('2d');
+  var eyesCv = d.createElement('canvas');
+  var ectx = eyesCv.getContext('2d');
+
+  var TAU = Math.PI * 2;
+  var DEG = Math.PI / 180;
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  /* =====================================================================
+     Chat
+     ===================================================================== */
+  var HINT_IDLE = 'Demo chat. Replies are pre-written.';
+  var HINT_READY = 'Press Enter or tap the face to send.';
+  var HINT_EMPTY = 'Type a message first.';
+  var INTRO = 'Hi. This is a demo chat bar. Type a message and press Enter to try it.';
+  var REPLIES = [
+    'Got it. This is only a demo, so my replies are pre-written.',
+    'Thanks. Nothing leaves this page. It works with no network.',
+    'I can blink and look around, but I cannot really answer yet.',
+    'Noted. A real reply would show up right here.',
+    'Still a demo. Tap the home icon if you want to start over.'
+  ];
+  var replyIndex = 0;
+  var pending = 0;
+  var timers = [];
+  var hintTimer = 0;
+  var typingRow = null;
+
+  function el(tag, cls, text) {
+    var n = d.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function stickToEnd() { thread.scrollTop = thread.scrollHeight; }
+
+  function addMsg(kind, text, quiet) {
+    var row = el('div', 'msg ' + kind + (quiet ? '' : ' in'));
+    if (kind === 'bot') {
+      var dot = el('span', 'dot');
+      dot.setAttribute('aria-hidden', 'true');
+      row.appendChild(dot);
+    }
+    var p = el('p', 'bubble');
+    p.appendChild(el('span', 'sr', kind === 'me' ? 'You: ' : 'Reply: '));
+    p.appendChild(d.createTextNode(text));
+    row.appendChild(p);
+    if (typingRow && typingRow.parentNode === log) log.insertBefore(row, typingRow);
+    else log.appendChild(row);
+    stickToEnd();
+    return row;
+  }
+
+  function buildTyping() {
+    typingRow = el('div', 'msg bot typing');
+    typingRow.setAttribute('aria-hidden', 'true');
+    typingRow.hidden = true;
+    typingRow.appendChild(el('span', 'dot'));
+    var dots = el('span', 'dots');
+    dots.appendChild(el('i')); dots.appendChild(el('i')); dots.appendChild(el('i'));
+    dots.appendChild(el('b', '', 'Thinking'));
+    typingRow.appendChild(dots);
+    log.appendChild(typingRow);
+  }
+
+  function setTyping(on) {
+    typingRow.hidden = !on;
+    statusEl.textContent = on ? 'Thinking' : '';
+    if (on) stickToEnd();
+  }
+
+  function setHint(text, ms) {
+    clearTimeout(hintTimer);
+    hint.textContent = text;
+    if (ms) hintTimer = setTimeout(syncText, ms);
+  }
+
+  function syncText() {
+    var has = input.value.trim().length > 0;
+    bar.classList.toggle('has-text', has);
+    sendBtn.setAttribute('aria-disabled', has ? 'false' : 'true');
+    clearTimeout(hintTimer);
+    hint.textContent = has ? HINT_READY : HINT_IDLE;
+    face.hasText = has;
+  }
+
+  function send() {
+    var text = input.value.replace(/\s+/g, ' ').trim();
+    var now = performance.now();
+    face.touch(now);
+    if (!text) {
+      face.nope(now);
+      setHint(HINT_EMPTY, 1800);
+      input.focus();
+      return;
+    }
+    addMsg('me', text);
+    input.value = '';
+    syncText();
+    pending++;
+    setTyping(true);
+    face.sent(now);
+    var id = setTimeout(function () {
+      pending = Math.max(0, pending - 1);
+      if (!pending) setTyping(false);
+      var row = addMsg('bot', REPLIES[replyIndex % REPLIES.length]);
+      replyIndex++;
+      face.replied(performance.now(), row, pending > 0);
+    }, face.reduced ? 1000 : rand(1700, 2500));
+    timers.push(id);
+  }
+
+  function startOver() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    pending = 0;
+    replyIndex = 0;
+    log.textContent = '';
+    addMsg('bot', INTRO, true);
+    buildTyping();
+    setTyping(false);
+    face.cancelThinking();
+  }
+
+  bar.addEventListener('submit', function (e) { e.preventDefault(); send(); });
+
+  /* Tapping the face must not close the phone keyboard. */
+  sendBtn.addEventListener('mousedown', function (e) {
+    if (d.activeElement === input) e.preventDefault();
+  });
+
+  homeBtn.addEventListener('click', function () {
+    var now = performance.now();
+    face.touch(now);
+    startOver();
+    face.lookAtElement(homeBtn, now, 700);
+  });
+
+  input.addEventListener('input', function () {
+    syncText();
+    face.typed(performance.now());
+  });
+  input.addEventListener('focus', function () {
+    bar.classList.add('is-focus');
+    face.focused(performance.now());
+  });
+  input.addEventListener('blur', function () { bar.classList.remove('is-focus'); });
+  d.addEventListener('selectionchange', function () {
+    if (d.activeElement === input) face.caretMoved(performance.now());
+  });
+
+  /* =====================================================================
+     Viewport: keep the bar above the on-screen keyboard
+     ===================================================================== */
+  var vv = window.visualViewport;
+  function fitViewport() {
+    if (vv && vv.scale <= 1.02) {
+      app.style.height = vv.height + 'px';
+      app.style.transform = vv.offsetTop > 0.5 ? 'translateY(' + vv.offsetTop + 'px)' : '';
+      var layoutH = Math.max(d.documentElement.clientHeight, window.innerHeight || 0);
+      d.documentElement.classList.toggle('kb', layoutH - vv.height > 120);
+    }
+    stickToEnd();
+    face.fit();
+  }
+  if (vv) {
+    vv.addEventListener('resize', fitViewport);
+    vv.addEventListener('scroll', fitViewport);
+  }
+  window.addEventListener('resize', fitViewport);
+  window.addEventListener('orientationchange', fitViewport);
+
+  /* =====================================================================
+     The face
+     All geometry is in units of H, the bar height, measured from the
+     right edge of the bar (u) and from the top (v).
+     ===================================================================== */
+  var G = {
+    edgeU: 0.22, edgeR: 0.90, fade: 0.17,      // soft circular edge
+    spotU: 0.50, spotV: 0.20,                  // light spot
+    eyeH: 0.45, wN: 0.3225, wK: 0.0735,        // eye height, neutral width, width change with gaze
+    gap: 0.085, cN: 0.605, cK: 0.0765, vK: 0.075,
+    limL: 1.05, limR: 0.14, limT: 0.10, limB: 0.90
+  };
+  var REST = { x: -0.85, y: 0 };               // resting pose: looking left, toward the input
+  var SLEEPY_MS = 26000, ASLEEP_MS = 46000;
+
+  function Spring(x, k, c) { this.x = x; this.v = 0; this.to = x; this.k = k; this.c = c; }
+  Spring.prototype.step = function (dt) {
+    this.v += (-this.k * (this.x - this.to) - this.c * this.v) * dt;
+    this.x += this.v * dt;
+  };
+  Spring.prototype.snap = function (x) { this.x = x; this.to = x; this.v = 0; };
+
+  var H = 64, CW = 122, DPR = 1, SX = 1, SY = 1;
+  var fieldFont = '16px sans-serif', fieldPad = 6;
+  var faceBox = { right: 0, top: 0 };
+
+  var gx = new Spring(REST.x, 420, 30);
+  var gy = new Spring(REST.y, 420, 30);
+  var wide = new Spring(1, 260, 21);
+  var lid = new Spring(0, 80, 15);
+  var cheek = new Spring(0, 230, 22);
+  var energy = new Spring(0, 70, 11);
+  var bob = new Spring(0, 300, 13);
+  var press = new Spring(0, 520, 34);
+  var quirk = new Spring(0, 110, 17);
+  var thinkAmt = new Spring(0, 60, 13);
+  var awake = new Spring(1, 26, 9);
+  var springs = [gx, gy, wide, lid, cheek, energy, bob, press, quirk, thinkAmt, awake];
+
+  var BLINKS = {
+    quick: [70, 35, 135],
+    slow: [170, 110, 300],
+    heavy: [260, 230, 520],
+    gentle: [340, 140, 480]
+  };
+  var blink = { seq: null, t0: 0, dur: 0, nextAt: performance.now() + rand(1600, 3200) };
+
+  var last = { active: performance.now(), pointer: -1e9, key: -1e9, focus: -1e9 };
+  var pointer = { x: 0, y: 0, over: false };
+  var fx = { happyUntil: 0, glanceUntil: 0, glance: { x: 0, y: 0 }, pleasedUntil: 0, shakeFrom: -1e9, blinkAt: 0, blinkKind: 'quick', napUntil: 0, helloUntil: 0 };
+  var wander = { x: REST.x, y: REST.y, atRest: true, nextAt: performance.now() + rand(1800, 2800), mx: 0, my: 0, microAt: 0 };
+  var think = { x: -0.55, y: -0.85, nextAt: 0 };
+  var lidTilt = 0.09;
+  var moodName = 'idle';
+  var hold = false;
+  var pose = null;
+  var meas = d.createElement('canvas').getContext('2d');
+
+  var reduceMQ = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+
+  var face = {
+    hasText: false,
+    reduced: !!(reduceMQ && reduceMQ.matches),
+
+    fit: function () {
+      var r = canvas.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      H = r.height; CW = r.width;
+      faceBox.right = r.right; faceBox.top = r.top;
+      DPR = Math.min(window.devicePixelRatio || 1, 3);
+      var w = Math.round(CW * DPR), h = Math.round(H * DPR);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w; canvas.height = h;
+        eyesCv.width = w; eyesCv.height = h;
+      }
+      SX = w / CW; SY = h / H;
+      var cs = getComputedStyle(input);
+      fieldFont = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+      fieldPad = parseFloat(cs.paddingLeft) || 0;
+    },
+
+    /* any sign of life from the person */
+    touch: function (now) {
+      if (moodName === 'sleepy' || moodName === 'asleep') wake(now);
+      last.active = now;
+    },
+    focused: function (now) {
+      this.touch(now);
+      last.focus = now;
+      bob.v -= 0.5;
+    },
+    typed: function (now) {
+      this.touch(now);
+      last.key = now;
+      bob.v += 0.32;
+      energy.x = Math.min(0.6, energy.x + 0.07);
+    },
+    caretMoved: function (now) {
+      if (now - last.focus > 500 && now - last.key > 80) { this.touch(now); last.key = now; }
+    },
+    sent: function (now) {
+      fx.happyUntil = now + 820;
+      bob.v = -1.7;
+      energy.x = 1.15;
+      blink.seq = null;
+      blink.nextAt = now + 1500;
+    },
+    replied: function (now, row, more) {
+      this.touch(now);
+      if (!more) {
+        fx.pleasedUntil = now + 700;
+        fx.blinkAt = now + 60; fx.blinkKind = 'quick';
+        if (row) this.lookAtElement(row, now, 950);
+        bob.v += 0.6;
+      }
+    },
+    nope: function (now) { fx.shakeFrom = now; fx.blinkAt = now + 520; fx.blinkKind = 'quick'; },
+    cancelThinking: function () { fx.happyUntil = 0; },
+    lookAtElement: function (node, now, ms) {
+      var r = node.getBoundingClientRect();
+      fx.glance = gazeAt(r.left + Math.min(r.width, 220) / 2, r.top + r.height / 2);
+      fx.glanceUntil = now + ms;
+      if (!blink.seq) { fx.blinkAt = now + 40; fx.blinkKind = 'quick'; }
+    }
+  };
+
+  function wake(now) {
+    awake.k = 300; awake.c = 24; awake.to = 1;
+    wide.x = 1.16;
+    lid.x *= 0.25;
+    energy.x = 0.55;
+    bob.v -= 0.7;
+    fx.blinkAt = now + 260; fx.blinkKind = 'double';
+    blink.seq = null;
+    wander.x = REST.x; wander.y = REST.y; wander.atRest = true; wander.nextAt = now + 1400;
+  }
+
+  /* where the eyes should point to look at a spot on the page */
+  function gazeAt(px, py) {
+    var ax = faceBox.right - G.cN * H, ay = faceBox.top + H / 2;
+    return {
+      x: Math.tanh(((px - ax) / (H * 3.4)) * 1.1),
+      y: Math.tanh(((py - ay) / (H * 2.6)) * 1.1)
+    };
+  }
+
+  function caretPoint() {
+    meas.font = fieldFont;
+    var pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+    var w = meas.measureText(input.value.slice(0, pos)).width;
+    var r = input.getBoundingClientRect();
+    var x = clamp(r.left + fieldPad + w - input.scrollLeft, r.left, r.right);
+    return { x: x, y: r.top + r.height / 2 };
+  }
+
+  function startBlink(kind, now) {
+    var b = BLINKS[kind] || BLINKS.quick;
+    blink.seq = kind === 'double' ? [BLINKS.quick, 90, BLINKS.quick] : [b];
+    blink.t0 = now;
+    blink.dur = 0;
+    for (var i = 0; i < blink.seq.length; i++) {
+      var s = blink.seq[i];
+      blink.dur += typeof s === 'number' ? s : s[0] + s[1] + s[2];
+    }
+  }
+
+  /* 1 is open, 0 is shut. lag lets one eye trail the other by a few ms. */
+  function blinkOpen(now, lag) {
+    if (!blink.seq) return 1;
+    var e = now - blink.t0 - lag;
+    if (e <= 0) return 1;
+    for (var i = 0; i < blink.seq.length; i++) {
+      var s = blink.seq[i];
+      if (typeof s === 'number') { if (e < s) return 1; e -= s; continue; }
+      if (e < s[0]) { var p = e / s[0]; return 1 - p * p; }
+      e -= s[0];
+      if (e < s[1]) return 0;
+      e -= s[1];
+      if (e < s[2]) {
+        var q = e / s[2];
+        return 1 - Math.pow(1 - q, 3) + 0.05 * Math.sin(Math.PI * q) * q;
+      }
+      e -= s[2];
+    }
+    return 1;
+  }
+
+  function nextBlinkDelay(m) {
+    if (face.reduced) return rand(5000, 8000);
+    if (m === 'thinking') return rand(1500, 3200);
+    if (m === 'sleepy') return rand(2200, 4200);
+    var base = 2000 + 4000 * Math.pow(Math.random(), 1.35);
+    return m === 'attentive' ? base * 1.3 : base;
+  }
+
+  function pickWander(now) {
+    var r = wander.atRest ? rand(0.4, 1) : Math.random();
+    var x, y, dwell;
+    wander.atRest = r < 0.4;
+    if (r < 0.4) { x = REST.x + rand(-0.06, 0.06); y = REST.y + rand(-0.04, 0.06); dwell = rand(1300, 3000); }
+    else if (r < 0.60) { x = rand(-0.2, 0.08); y = rand(0, 0.14); dwell = rand(900, 2200); }           // at you
+    else if (r < 0.74) { x = rand(-0.8, -0.35); y = rand(-0.95, -0.6); dwell = rand(800, 1700); }       // at the thread
+    else if (r < 0.84) { x = rand(0.55, 0.95); y = rand(-0.35, 0.15); dwell = rand(700, 1400); }        // off to the right
+    else if (r < 0.90) { x = -1; y = rand(0.05, 0.2); dwell = rand(700, 1300); }                        // at the home icon
+    else { x = rand(-0.9, 0.8); y = rand(-0.8, 0.5); dwell = rand(600, 1500); }
+    var jump = Math.abs(x - wander.x) + Math.abs(y - wander.y);
+    wander.x = x; wander.y = y; wander.nextAt = now + dwell;
+    wander.mx = 0; wander.my = 0; wander.microAt = now + rand(400, 900);
+    if (jump > 0.9 && !blink.seq && Math.random() < 0.4) startBlink('quick', now);   // people often blink on a big look
+  }
+
+  function currentMood(now) {
+    if (now < fx.happyUntil) return 'happy';
+    if (pending > 0) return 'thinking';
+    var quiet = now - last.active;
+    if (quiet > ASLEEP_MS) return 'asleep';
+    if (quiet > SLEEPY_MS) return 'sleepy';
+    if (now - last.key < 1400) return 'attentive';
+    if (now - last.focus < 1300) return 'curious';
+    return 'idle';
+  }
+
+  function update(now, dt) {
+    var i;
+    if (hold || face.reduced) {
+      /* still face: resting pose, and at most a slow gentle blink */
+      for (i = 0; i < springs.length; i++) springs[i].v = 0;
+      gx.snap(REST.x); gy.snap(REST.y); wide.snap(1); lid.snap(0); cheek.snap(0); energy.snap(0);
+      bob.snap(0); press.snap(0); quirk.snap(0); thinkAmt.snap(0); awake.snap(1);
+      moodName = currentMood(now);
+      if (moodName === 'sleepy' || moodName === 'asleep') moodName = 'idle';
+      if (hold) { blink.seq = null; blink.nextAt = now + 3000; }
+      else if (blink.seq) { if (now - blink.t0 > blink.dur + 40) { blink.seq = null; blink.nextAt = now + nextBlinkDelay(moodName); } }
+      else if (now >= blink.nextAt) startBlink('gentle', now);
+      pose = computePose(now, blinkOpen(now, 0), blinkOpen(now, 0));
+      return;
+    }
+
+    var m = currentMood(now);
+    if (m !== moodName) {
+      if (m === 'thinking') { think.x = -0.55; think.y = -0.85; think.nextAt = now + 760; }
+      if (m === 'asleep') { awake.k = 26; awake.c = 9; }
+      moodName = m;
+    }
+
+    var tx = REST.x, ty = REST.y, k = 420, c = 30;
+    var tWide = 1, tLid = 0, tLidTilt = 0.09, tCheek = 0, tQuirk = 0, tThink = 0, tAwake = 1, tBob = 0;
+    var tEnergy = 0.05 * Math.sin(now * 0.0011) + (face.hasText ? 0.1 : 0);
+    var driftAmt = 1;
+    var pointerFresh = now - last.pointer < 2400;
+
+    if (m === 'happy') {
+      tx = -0.28; ty = -0.1; tCheek = 1; tWide = 1.05; tEnergy = 0.4;
+    } else if (m === 'thinking') {
+      if (now >= think.nextAt) {
+        think.x = think.x < 0 ? rand(0.15, 0.6) : rand(-0.78, -0.35);
+        think.y = rand(-0.98, -0.72);
+        think.nextAt = now + rand(560, 1000);
+      }
+      tx = think.x; ty = think.y; k = 120; c = 17;
+      tWide = 0.98; tLid = 0.13; tLidTilt = 0; tQuirk = 1; tThink = 1;
+      tEnergy = 0.45 + 0.3 * Math.sin(now * 0.0058);
+      driftAmt = 0.5;
+    } else if (m === 'asleep') {
+      tx = -0.45; ty = 0.6; k = 40; c = 11;
+      tAwake = 0; tLid = 0.3; tLidTilt = 0.09;
+      var br = Math.sin(now * 0.0014);
+      tEnergy = -0.6 + 0.14 * br; tBob = 0.014 * br;
+      driftAmt = 0;
+    } else if (m === 'sleepy') {
+      var nod = Math.pow(Math.max(0, Math.sin(now * 0.0012)), 3);
+      tx = -0.55 + 0.25 * Math.sin(now * 0.00037); ty = 0.42 + 0.3 * nod; k = 50; c = 12;
+      tLid = 0.4 + 0.22 * nod; tLidTilt = 0.09; tWide = 0.98; tBob = 0.02 * nod;
+      tEnergy = -0.32;
+      driftAmt = 0.4;
+    } else {
+      /* idle, curious, attentive */
+      var shake = now - fx.shakeFrom;
+      if (shake < 620) {
+        tx = -0.15 + 0.62 * Math.sin(shake / 620 * TAU * 2) * (1 - shake / 620); ty = 0.05; k = 520; c = 30;
+      } else if (m === 'attentive') {
+        var cp = caretPoint(), ca = gazeAt(cp.x, cp.y);
+        tx = ca.x; ty = 0.07; tWide = 1.035;
+        driftAmt = 0.35;
+      } else if (now < fx.glanceUntil) {
+        tx = fx.glance.x; ty = fx.glance.y;
+      } else if (pointerFresh) {
+        var pg = gazeAt(pointer.x, pointer.y);
+        tx = pg.x; ty = pg.y; driftAmt = 0.3;
+        if (pointer.over) { tWide = 1.06; tEnergy += face.hasText ? 0.22 : 0.08; }
+      } else if (m === 'curious') {
+        var fp = caretPoint(), fa = gazeAt(fp.x, fp.y);
+        tx = fa.x; ty = 0.04; tWide = 1.09; tEnergy += 0.12;
+      } else {
+        if (now >= wander.nextAt) pickWander(now);
+        if (now >= wander.microAt) {             // tiny fixation jumps
+          wander.mx = rand(-0.05, 0.05); wander.my = rand(-0.04, 0.04);
+          wander.microAt = now + rand(350, 1000);
+        }
+        tx = wander.x + wander.mx; ty = wander.y + wander.my;
+      }
+      if (now < fx.pleasedUntil) { tCheek = 0.6; tWide = Math.max(tWide, 1.03); }
+    }
+
+    /* slow idle drift so the eyes are never perfectly still */
+    tx += driftAmt * (0.028 * Math.sin(now * 0.00091 + 1.3) + 0.016 * Math.sin(now * 0.0023));
+    ty += driftAmt * (0.022 * Math.sin(now * 0.00077 + 0.4) + 0.012 * Math.sin(now * 0.0019 + 2));
+
+    gx.k = gy.k = k; gx.c = gy.c = c;
+    gx.to = clamp(tx, -1.05, 1.05); gy.to = clamp(ty, -1.05, 1.05);
+    wide.to = tWide; lid.to = tLid; cheek.to = tCheek; quirk.to = tQuirk; thinkAmt.to = tThink;
+    if (now < fx.napUntil) tAwake = 0;
+    awake.to = tAwake; energy.to = tEnergy; bob.to = tBob;
+    lidTilt += (tLidTilt - lidTilt) * Math.min(1, dt * 8);
+
+    var steps = dt > 0.02 ? 3 : 2, h = dt / steps;
+    for (var s = 0; s < steps; s++) for (i = 0; i < springs.length; i++) springs[i].step(h);
+
+    /* blinking */
+    if (fx.blinkAt && now >= fx.blinkAt) { fx.blinkAt = 0; startBlink(fx.blinkKind, now); }
+    if (blink.seq) {
+      if (now - blink.t0 > blink.dur + 40) { blink.seq = null; blink.nextAt = now + nextBlinkDelay(m); }
+    } else if (now >= blink.nextAt && m !== 'asleep' && m !== 'happy') {
+      var r = Math.random();
+      if (m === 'sleepy') startBlink('heavy', now);
+      else startBlink(r < 0.16 ? 'double' : r < 0.28 ? 'slow' : 'quick', now);
+    }
+    var a = clamp(awake.x, 0, 1);
+    pose = computePose(now, blinkOpen(now, 0) * a, blinkOpen(now, 14) * a);
+  }
+
+  function computePose(now, openL, openR) {
+    var x = clamp(gx.x, -1.12, 1.12), y = clamp(gy.x, -1.12, 1.12);
+    var s = wide.x * (1 - 0.07 * press.x);
+    /* squash and stretch with the speed of the look */
+    var kx = clamp(Math.abs(gx.v) * 0.0055, 0, 0.075), ky = clamp(Math.abs(gy.v) * 0.0055, 0, 0.075);
+    var stX = 1 + kx - ky * 0.5, stY = 1 + ky - kx * 0.5;
+    var q = quirk.x;
+    var wL = (G.wN + G.wK * x) * s, wR = (G.wN - G.wK * x) * s;
+    var hh = G.eyeH * (1 - 0.05 * Math.abs(y)) * s;
+    var total = wL + G.gap + wR;
+    var cu = G.cN - G.cK * x;
+    var cv = 0.5 + G.vK * y + bob.x + 0.02 * press.x;
+
+    var L = { side: -1, u: cu + total / 2 - wL / 2, v: cv + 0.006 * q, w: wL * stX * (1 - 0.03 * q), h: hh * stY * (1 - 0.05 * q),
+              rot: -(3.75 + 2.65 * x) * DEG, open: openL };
+    var R = { side: 1, u: cu - total / 2 + wR / 2, v: cv - 0.012 * q, w: wR * stX * (1 + 0.02 * q), h: hh * stY * (1 + 0.04 * q),
+              rot: (3.75 - 2.65 * x) * DEG, open: openR };
+    L.lid = R.lid = clamp(lid.x, 0, 0.9);
+    L.lidTilt = R.lidTilt = lidTilt;
+    L.cheek = R.cheek = clamp(cheek.x, 0, 1.1);
+    L.sx = 1 + 0.1 * (1 - clamp(openL, 0, 1));
+    R.sx = 1 + 0.1 * (1 - clamp(openR, 0, 1));
+
+    /* keep both eyes inside the green and clear of the rounded corners */
+    var maxU = L.u + L.w * L.sx / 2, minU = R.u - R.w * R.sx / 2, shift = 0;
+    if (maxU > G.limL) shift = G.limL - maxU;
+    if (minU + shift < G.limR) shift = G.limR - minU;
+    L.u += shift; R.u += shift;
+    var half = Math.max(L.h, R.h) / 2 + 0.01;
+    var top = Math.min(L.v, R.v) - half, bot = Math.max(L.v, R.v) + half, vs = 0;
+    if (top < G.limT) vs = G.limT - top; else if (bot > G.limB) vs = G.limB - bot;
+    L.v += vs; R.v += vs;
+    return { L: L, R: R, gaze: { x: x, y: y } };
+  }
+
+  /* ---------- painting ---------- */
+  function X(u) { return CW - u * H; }
+
+  function paintBody(c, e, th, t) {
+    var w = CW, h = H, g;
+    c.globalCompositeOperation = 'source-over';
+
+    /* lighter upper half, deep saturated bottom */
+    g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, '#44cd7e');
+    g.addColorStop(0.42, '#3acb78');
+    g.addColorStop(0.78, '#20aa5b');
+    g.addColorStop(1, '#14964b');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+
+    /* the right side sits a touch deeper */
+    g = c.createLinearGradient(X(0.5), 0, X(0), 0);
+    g.addColorStop(0, 'rgba(16,110,58,0)');
+    g.addColorStop(1, 'rgba(16,110,58,0.28)');
+    c.fillStyle = g; c.fillRect(X(0.5), 0, 0.5 * h, h);
+
+    /* light spot near the top; it sways a little while thinking */
+    var su = G.spotU + th * 0.17 * Math.sin(t * 0.0031);
+    var sv = G.spotV + th * 0.03 * Math.cos(t * 0.0023);
+    var a = 0.94 + 0.06 * clamp(e, 0, 1);
+    g = c.createRadialGradient(X(su), sv * h, 0, X(su), sv * h, 0.6 * h);
+    g.addColorStop(0, 'rgba(148,243,182,' + a + ')');
+    g.addColorStop(0.14, 'rgba(142,240,176,' + (a * 0.9) + ')');
+    g.addColorStop(0.36, 'rgba(142,240,176,' + (a * 0.56) + ')');
+    g.addColorStop(0.68, 'rgba(142,240,176,' + (a * 0.17) + ')');
+    g.addColorStop(1, 'rgba(142,240,176,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+
+    /* deep pool along the bottom */
+    g = c.createRadialGradient(X(0.55), 1.2 * h, 0, X(0.55), 1.2 * h, 0.75 * h);
+    g.addColorStop(0, 'rgba(15,138,66,0.7)');
+    g.addColorStop(1, 'rgba(15,138,66,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+
+    /* mood: brighter with energy, dimmer when sleepy */
+    if (e > 0.01) {
+      c.globalCompositeOperation = 'lighter';
+      c.fillStyle = 'rgba(120,235,165,' + (0.15 * clamp(e, 0, 1.2)) + ')';
+      c.fillRect(0, 0, w, h);
+      c.globalCompositeOperation = 'source-over';
+    } else if (e < -0.01) {
+      c.fillStyle = 'rgba(6,44,26,' + (0.5 * clamp(-e, 0, 1)) + ')';
+      c.fillRect(0, 0, w, h);
+    }
+
+    /* the green deepens toward the soft edge, then fades out on a circle */
+    var cx = X(G.edgeU), cy = 0.5 * h;
+    var R = (G.edgeR + 0.07 * clamp(e, -0.4, 1.2)) * h;
+    g = c.createRadialGradient(cx, cy, Math.max(0, R - 0.24 * h), cx, cy, R + 0.1 * h);
+    g.addColorStop(0, 'rgba(18,138,80,0)');
+    g.addColorStop(0.45, 'rgba(18,138,80,0.2)');
+    g.addColorStop(1, 'rgba(18,138,80,0.75)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+
+    var r0 = R - G.fade * h, r1 = R + (G.fade + 0.12) * h;
+    var main = (2 * G.fade) / (2 * G.fade + 0.12);
+    g = c.createRadialGradient(cx, cy, Math.max(0, r0), cx, cy, r1);
+    g.addColorStop(0, 'rgba(0,0,0,1)');
+    for (var i = 1; i < 8; i++) {
+      var p = i / 8, sm = p * p * (3 - 2 * p);
+      g.addColorStop(p * main, 'rgba(0,0,0,' + (1 - 0.96 * sm) + ')');
+    }
+    g.addColorStop(main, 'rgba(0,0,0,0.04)');
+    g.addColorStop(main + (1 - main) * 0.5, 'rgba(0,0,0,0.012)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.globalCompositeOperation = 'destination-in';
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'source-over';
+  }
+
+  function drawEye(c, e) {
+    var open = clamp(e.open, 0, 1.08);
+    c.save();
+    c.translate(X(e.u), e.v * H);
+    c.scale(e.sx, lerp(0.07, 1, open));          /* blink squash in screen space keeps shut eyes level */
+    c.rotate(e.rot);
+    c.scale(e.w * H / 2, e.h * H / 2);
+
+    c.beginPath(); c.arc(0, 0, 1, 0, TAU); c.clip();
+    if (e.lid > 0.004) {                         /* heavy upper lid */
+      c.beginPath();
+      c.save(); c.rotate(-e.rot + e.side * e.lidTilt); c.rect(-3, -1 + 2 * e.lid, 6, 6); c.restore();   /* outer corners droop when sleepy */
+      c.clip();
+    }
+    if (e.cheek > 0.004) {                       /* cheek pushing the lower lid up */
+      var r = 2.3, top = lerp(1.04, 0.0, e.cheek);
+      c.beginPath(); c.rect(-3, -3, 6, 6); c.arc(-e.side * 0.12, top + r, r, 0, TAU);
+      c.clip('evenodd');
+    }
+
+    /* mint rim light: left eye lower left, right eye lower right */
+    c.fillStyle = '#a5ffd0';
+    c.fillRect(-1.3, -1.3, 2.6, 2.6);
+
+    var ox = -e.side * 0.09, oy = -0.062, g;
+    g = c.createRadialGradient(ox, oy, 0, ox, oy, 1.015);
+    g.addColorStop(0, '#f6fef9');
+    g.addColorStop(0.5, '#effcf3');
+    g.addColorStop(0.86, '#e4f9ec');
+    g.addColorStop(0.955, 'rgba(226,248,234,1)');
+    g.addColorStop(1, 'rgba(226,248,234,0)');
+    c.fillStyle = g; c.fillRect(-1.3, -1.3, 2.6, 2.6);
+
+    /* soft white highlight, upper left */
+    g = c.createRadialGradient(-0.12, -0.44, 0, -0.12, -0.44, 0.78);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g; c.fillRect(-1.3, -1.3, 2.6, 2.6);
+
+    /* a little green bounce light low down */
+    g = c.createLinearGradient(0, 0.05, 0, 1);
+    g.addColorStop(0, 'rgba(190,244,214,0)');
+    g.addColorStop(1, 'rgba(190,244,214,0.72)');
+    c.fillStyle = g; c.fillRect(-1.3, 0, 2.6, 1.3);
+    c.restore();
+  }
+
+  /* each eye is drawn on its own layer, then stamped with a thin soft dark edge on its inner side */
+  function stampEye(e) {
+    ectx.setTransform(SX, 0, 0, SY, 0, 0);
+    ectx.clearRect(0, 0, CW, H);
+    drawEye(ectx, e);
+    ctx.save();
+    ctx.shadowColor = 'rgba(3,70,33,0.62)';
+    ctx.shadowBlur = 0.03 * H * DPR;
+    ctx.shadowOffsetX = -e.side * 0.008 * H * DPR;
+    ctx.shadowOffsetY = 0.003 * H * DPR;
+    ctx.drawImage(eyesCv, 0, 0, CW, H);
+    ctx.restore();
+  }
+
+  function render(now) {
+    if (!pose) return;
+    ctx.setTransform(SX, 0, 0, SY, 0, 0);
+    ctx.clearRect(0, 0, CW, H);
+    paintBody(ctx, energy.x, clamp(thinkAmt.x, 0, 1), now);
+
+    stampEye(pose.L);
+    stampEye(pose.R);
+  }
+
+  var lastT = performance.now();
+  function frame(t) {
+    requestAnimationFrame(frame);
+    if (d.hidden) { lastT = t; return; }
+    var dt = clamp((t - lastT) / 1000, 0, 0.05);
+    lastT = t;
+    update(t, dt);
+    render(t);
+  }
+
+  /* ---------- pointer and finger ---------- */
+  function onPoint(e) {
+    var now = performance.now();
+    pointer.x = e.clientX; pointer.y = e.clientY;
+    last.pointer = now;
+    if (now < fx.helloUntil) { fx.glanceUntil = 0; fx.helloUntil = 0; }   /* a moving pointer beats the hello look */
+    face.touch(now);
+  }
+  window.addEventListener('pointermove', onPoint, { passive: true });
+  window.addEventListener('pointerdown', onPoint, { passive: true });
+  window.addEventListener('touchmove', function (e) {
+    if (e.touches && e.touches[0]) onPoint(e.touches[0]);
+  }, { passive: true });
+  d.documentElement.addEventListener('mouseleave', function () { last.pointer = -1e9; pointer.over = false; });
+  window.addEventListener('keydown', function () { face.touch(performance.now()); });
+  sendBtn.addEventListener('pointerenter', function () { pointer.over = true; });
+  sendBtn.addEventListener('pointerleave', function () { pointer.over = false; press.to = 0; });
+  sendBtn.addEventListener('pointerdown', function () { press.to = 1; });
+  window.addEventListener('pointerup', function () { press.to = 0; });
+  window.addEventListener('pointercancel', function () { press.to = 0; pointer.over = false; });
+  sendBtn.addEventListener('keydown', function (e) { if (e.key === ' ' || e.key === 'Enter') press.to = 1; });
+  sendBtn.addEventListener('keyup', function () { press.to = 0; });
+
+  if (reduceMQ) {
+    var onReduce = function () { face.reduced = reduceMQ.matches; blink.seq = null; blink.nextAt = performance.now() + 1500; };
+    if (reduceMQ.addEventListener) reduceMQ.addEventListener('change', onReduce);
+    else if (reduceMQ.addListener) reduceMQ.addListener(onReduce);
+  }
+  if (window.ResizeObserver) new ResizeObserver(function () { face.fit(); }).observe(bar);
+  d.addEventListener('visibilitychange', function () { if (!d.hidden) { lastT = performance.now(); last.active = lastT; } });
+
+  /* small hook for checks and for tinkering in the console */
+  window.__face = {
+    hold: function (on) { hold = !!on; },
+    quiet: function (ms) { last.active = performance.now() - ms; last.pointer = last.key = last.focus = -1e9; },
+    blink: function (kind) { startBlink(kind || 'quick', performance.now()); },
+    state: function () {
+      if (!pose) return null;
+      function box(e) {
+        var w = e.w * e.sx * H, hgt = e.h * H;
+        return { left: X(e.u) - w / 2, right: X(e.u) + w / 2, top: e.v * H - hgt / 2, bottom: e.v * H + hgt / 2, open: e.open };
+      }
+      return {
+        mood: moodName, gaze: { x: gx.x, y: gy.x }, H: H, CW: CW,
+        L: box(pose.L), R: box(pose.R),
+        lid: lid.x, cheek: cheek.x, energy: energy.x, wide: wide.x,
+        safe: { left: X(G.limL), right: X(G.limR), top: G.limT * H, bottom: G.limB * H }
+      };
+    }
+  };
+
+  /* ---------- go ---------- */
+  startOver();
+  syncText();
+  face.fit();
+  fitViewport();
+  if (!face.reduced) {
+    /* hello: open the eyes, look at you for a moment, then settle toward the input */
+    var born = performance.now();
+    awake.snap(0); awake.k = 300; awake.c = 24;
+    fx.napUntil = born + 320;
+    fx.glance = { x: -0.06, y: 0.05 }; fx.glanceUntil = fx.helloUntil = born + 1700;
+    fx.blinkAt = born + 1000; fx.blinkKind = 'double';
+    blink.nextAt = born + 3200;
+    wander.nextAt = born + rand(3400, 4400);
+  }
+  update(performance.now(), 0);
+  render(performance.now());
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

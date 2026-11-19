@@ -1,0 +1,1077 @@
+<!doctype html>
+<!--
+  Chat bar: compact pill that opens into a composer. Avatar drawn in inline SVG.
+
+  DESIGN TOKENS
+  Page ............ #0b0b0d
+  Bar fill ........ #121212, soft lighter inner rim (about #232323 at the edge, gone by 0.16 H)
+  Bar outline ..... 1px rgba(255,255,255,.13)
+  Bar height (H) .. 72px (60px under 480px wide)
+  Bar radius ...... 0.33 H (rounded rectangle, not a capsule)
+  Bar width ....... compact 4.6 H, open min(640px, screen width minus gutters)
+  Gutter .......... 12px plus safe-area insets
+  Home icon ....... #ffffff filled, 22 to 23px, 48px touch target, center 0.63 H from the left
+  Avatar size ..... the right end of the bar, solid for 1.0 H, soft edge out to 1.36 H
+  Avatar (green) .. light spot #8ef0b0, middle #3acb78, right side #2fb96a, bottom #14964b
+                    soft edge #128a50 > #17573c > #13271e > bar, edge circle radius 0.9 H
+  Eyes ............ #effcf3 to #e2f8ea, white highlight, mint rim #a5ffd0, height 0.45 H
+  Accent .......... #5fe39a (focus ring, caret), #3acb78 (dots)
+  Text ............ #f1f1f3 input, #ececef messages, #8a8a90 hint and placeholder
+  Type ............ system font stack, input 17px, messages 15px, hint 13px
+  Motion .......... pill spring k=250 c=21 (open) / c=25 (close); eye spring k=300 c=25;
+                    blink 75ms close, 35ms hold, 140ms open, every 2 to 6s
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0b0d">
+<title>Chat bar</title>
+<style>
+  :root {
+    --page: #0b0b0d;
+    --bar: #121212;
+    --line: rgba(255, 255, 255, .13);
+    --h: 72px;
+    --r: calc(var(--h) * .33);
+    --gutter: 12px;
+    --accent: #5fe39a;
+    --green: #3acb78;
+    --text: #ececef;
+    --muted: #8a8a90;
+    --w: min(calc(var(--h) * 4.6), 100%);
+    --open: 0;
+  }
+  @media (max-width: 479px) {
+    :root { --h: 60px; }
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--page);
+    color: var(--text);
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body {
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: rgba(58, 203, 120, .35); }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* The app box follows the visual viewport, so the bar stays above the on-screen keyboard. */
+  .app {
+    position: fixed;
+    left: 0; right: 0;
+    top: var(--vv-top, 0px);
+    height: 100vh;
+    height: 100dvh;
+    height: var(--vv-h, 100dvh);
+    display: flex;
+    flex-direction: column;
+  }
+  /* on phones, ease the move when the keyboard slides in */
+  @media (pointer: coarse) {
+    .app { transition: height .2s cubic-bezier(.2, .8, .2, 1), top .2s cubic-bezier(.2, .8, .2, 1); }
+  }
+
+  /* ---------- thread ---------- */
+  .stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .thread {
+    width: 100%;
+    max-width: 656px;
+    max-height: 100%;
+    margin: 0 auto;
+    padding: 28px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #26262a transparent;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 26px);
+    transition: opacity .2s ease;
+  }
+  .thread:empty { display: none; }
+  .thread.is-leaving { opacity: 0; }
+  .thread:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 12px; }
+
+  .msg {
+    max-width: min(84%, 460px);
+    font-size: 15px;
+    line-height: 1.42;
+    overflow-wrap: anywhere;
+    animation: rise .34s cubic-bezier(.2, .9, .25, 1) both;
+  }
+  .msg.me {
+    align-self: flex-end;
+    padding: 9px 14px;
+    color: var(--text);
+    background: #171719;
+    border-radius: 18px 18px 6px 18px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  }
+  .msg.bot {
+    align-self: flex-start;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 4px 0 4px 2px;
+    color: #c9d1cc;
+  }
+  .msg.bot::before {
+    content: "";
+    flex: none;
+    width: 8px; height: 8px;
+    margin-top: .46em;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 30%, #8ef0b0, #3acb78 55%, #14964b);
+    box-shadow: 0 0 10px rgba(58, 203, 120, .45);
+  }
+  .msg.typing { padding: 4px 0 4px 2px; }
+  .msg.typing::before { content: none; }
+  .dots { display: inline-flex; align-items: center; gap: 5px; height: 1.42em; }
+  .dots i {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    opacity: .35;
+    animation: dot 1.15s ease-in-out infinite;
+  }
+  .dots i:nth-child(2) { animation-delay: .16s; }
+  .dots i:nth-child(3) { animation-delay: .32s; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px) scale(.985); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes dot {
+    0%, 70%, 100% { opacity: .3; transform: translateY(0); }
+    35%           { opacity: 1;  transform: translateY(-3px); }
+  }
+
+  /* ---------- dock ---------- */
+  .dock {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding:
+      4px
+      max(var(--gutter), env(safe-area-inset-right))
+      max(14px, calc(env(safe-area-inset-bottom) + 10px))
+      max(var(--gutter), env(safe-area-inset-left));
+  }
+
+  @media (min-width: 480px) and (min-height: 560px) {
+    .dock { padding-bottom: max(30px, calc(env(safe-area-inset-bottom) + 10px)); }
+  }
+
+  .hint {
+    display: grid;
+    margin: 0 0 12px;
+    max-height: 24px;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--muted);
+    text-align: center;
+    transition: opacity .3s ease, max-height .35s ease, margin .35s ease;
+  }
+  .hint span {
+    grid-area: 1 / 1;
+    transition: opacity .25s ease, transform .35s cubic-bezier(.2, .9, .25, 1);
+  }
+  .hint .when-open { opacity: 0; transform: translateY(4px); }
+  .dock.is-open .hint .when-open { opacity: 1; transform: none; }
+  .dock.is-open .hint .when-closed { opacity: 0; transform: translateY(-4px); }
+  .dock.has-thread .hint { opacity: 0; max-height: 0; margin-bottom: 0; }
+  @media (max-height: 420px) {
+    .hint { display: none; }
+  }
+  kbd {
+    display: inline-block;
+    min-width: 20px;
+    padding: 0 5px;
+    font: inherit;
+    font-size: 12px;
+    line-height: 18px;
+    color: #b4b4ba;
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+  }
+
+  .pill {
+    position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* soft light behind the avatar end, only while it thinks */
+  .aura {
+    position: absolute;
+    top: 50%;
+    left: calc(50% + var(--w) / 2 - var(--h) * 1.55);
+    width: calc(var(--h) * 2.1);
+    height: calc(var(--h) * 2);
+    transform: translateY(-50%);
+    background: radial-gradient(closest-side, rgba(58, 203, 120, .26), rgba(58, 203, 120, .07) 60%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .5s ease;
+  }
+  .pill.is-thinking .aura { opacity: 1; animation: breathe 1.5s ease-in-out infinite; }
+  @keyframes breathe {
+    0%, 100% { transform: translateY(-50%) scale(.94); }
+    50%      { transform: translateY(-50%) scale(1.06); }
+  }
+
+  /* ---------- the bar ---------- */
+  .bar {
+    position: relative;
+    flex: none;
+    width: var(--w);
+    height: var(--h);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    background: var(--bar);
+    border-radius: var(--r);
+    overflow: hidden;
+    isolation: isolate;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+            user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    box-shadow: 0 18px 44px -20px rgba(0, 0, 0, .9);
+    transition: transform .22s cubic-bezier(.3, 1.5, .5, 1), box-shadow .25s ease;
+  }
+  .bar.is-open { cursor: default; }
+  .bar:not(.is-open):active { transform: scale(.985); }
+  .bar.has-focus { box-shadow: 0 18px 44px -20px rgba(0, 0, 0, .9), 0 0 0 4px rgba(58, 203, 120, .07); }
+
+  /* outline and the soft lighter inner rim. Sits under the avatar, so the green runs edge to edge. */
+  .bar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow:
+      inset 0 0 0 1px var(--line),
+      inset 0 0 calc(var(--h) * .16) calc(var(--h) * .035) rgba(255, 255, 255, .135);
+  }
+  /* the bar edge as it crosses the green: a thin, slightly darker lip */
+  .bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow:
+      inset 0 0 0 1px rgba(14, 40, 28, .13),
+      inset 0 0 calc(var(--h) * .03) rgba(10, 70, 40, .12);
+    -webkit-mask-image: linear-gradient(to left, #000 calc(var(--h) * .85), transparent calc(var(--h) * 1.25));
+            mask-image: linear-gradient(to left, #000 calc(var(--h) * .85), transparent calc(var(--h) * 1.25));
+  }
+
+  /* keyboard focus ring for the input: a green line along the dark part of the bar */
+  .ring {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    box-shadow: inset 0 0 0 1.5px rgba(95, 227, 154, .5);
+    -webkit-mask-image: linear-gradient(to left, transparent calc(var(--h) * 1.1), #000 calc(var(--h) * 1.6));
+            mask-image: linear-gradient(to left, transparent calc(var(--h) * 1.1), #000 calc(var(--h) * 1.6));
+    transition: opacity .2s ease;
+  }
+  .field:focus-visible ~ .ring { opacity: 1; }
+
+  .home {
+    position: relative;
+    z-index: 2;
+    flex: none;
+    width: 48px; height: 48px;
+    margin: 0 0 0 calc(var(--h) * .63 - 24px);
+    padding: 0;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: none;
+    border: 0;
+    border-radius: 14px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color .15s ease;
+  }
+  .home svg {
+    width: clamp(22px, calc(var(--h) * .32), 24px);
+    height: clamp(22px, calc(var(--h) * .32), 24px);
+    display: block;
+    transition: transform .2s cubic-bezier(.3, 1.6, .5, 1);
+  }
+  @media (hover: hover) {
+    .home:hover { background: rgba(255, 255, 255, .055); }
+  }
+  .home:active svg { transform: scale(.9); }
+  .home:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+
+  .field {
+    position: relative;
+    z-index: 2;
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    margin: 0 calc(var(--h) * 1.2) 0 0;
+    padding: 0 14px 0 6px;
+    font: inherit;
+    font-size: 17px;
+    color: #f1f1f3;
+    caret-color: var(--accent);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    -webkit-appearance: none;
+            appearance: none;
+    -webkit-user-select: text;
+            user-select: text;
+    opacity: calc((var(--open) - .3) * 1.7);
+    transform: translateX(calc((1 - var(--open)) * 14px));
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  }
+  .bar.is-open .field { pointer-events: auto; }
+  .field::placeholder { color: var(--muted); opacity: 1; }
+
+  .face {
+    position: absolute;
+    z-index: 1;
+    top: 0; right: 0; bottom: 0;
+    width: calc(var(--h) * 1.2);
+    margin: 0; padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0 var(--r) var(--r) 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .face svg {
+    position: absolute;
+    top: 0; right: 0;
+    width: calc(var(--h) * 1.7);
+    height: 100%;
+    display: block;
+    pointer-events: none;
+  }
+  .face:focus-visible { outline: none; }
+  .face:focus-visible::after {
+    content: "";
+    position: absolute;
+    inset: 5px 5px 5px 3px;
+    border-radius: calc(var(--r) - 5px);
+    border: 2px solid #f4fff8;
+    box-shadow: 0 0 0 1.5px rgba(4, 52, 26, .6);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition: none !important;
+    }
+    .dots i { opacity: .7; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <main class="stage">
+    <h1 class="sr-only">Chat demo</h1>
+    <div class="thread" id="thread" role="log" aria-live="polite" aria-relevant="additions" aria-label="Messages"></div>
+  </main>
+
+  <div class="dock" id="dock">
+    <p class="hint" id="hint">
+      <span class="when-closed" id="hintClosed">Press <kbd>/</kbd> or click the bar to chat</span>
+      <span class="when-open" id="hintOpen" aria-hidden="true"><kbd>Enter</kbd> to send, <kbd>Esc</kbd> to close</span>
+    </p>
+
+    <div class="pill" id="pill">
+      <span class="aura" aria-hidden="true"></span>
+
+      <form class="bar" id="bar" aria-label="Chat" autocomplete="off" novalidate>
+        <button type="button" class="home" id="home" aria-label="Home" title="Back to start">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3.7 20.3 10.5V20.3H16.1V13.4A2.1 2.1 0 0 0 14 11.3H10A2.1 2.1 0 0 0 7.9 13.4V20.3H3.7V10.5Z"
+                  fill="currentColor" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <label class="sr-only" for="msg">Message</label>
+        <input class="field" id="msg" name="message" type="text" inputmode="text" enterkeyhint="send"
+               autocomplete="off" autocapitalize="sentences" maxlength="600" placeholder="Say something">
+        <span class="ring" aria-hidden="true"></span>
+
+        <button type="button" class="face" id="face" aria-label="Open chat">
+          <svg viewBox="0 0 170 100" preserveAspectRatio="xMaxYMid slice" aria-hidden="true" focusable="false">
+            <defs>
+              <!-- soft left edge: a circle of radius 0.9 H around a point 0.22 H in from the right -->
+              <radialGradient id="fEdge" gradientUnits="userSpaceOnUse" cx="148" cy="50" r="114">
+                <stop offset="0"    stop-color="#fff"/>
+                <stop offset=".675" stop-color="#fff"/>
+                <stop offset=".693" stop-color="#fff" stop-opacity=".985"/>
+                <stop offset=".716" stop-color="#fff" stop-opacity=".93"/>
+                <stop offset=".741" stop-color="#fff" stop-opacity=".85"/>
+                <stop offset=".768" stop-color="#fff" stop-opacity=".725"/>
+                <stop offset=".794" stop-color="#fff" stop-opacity=".575"/>
+                <stop offset=".821" stop-color="#fff" stop-opacity=".40"/>
+                <stop offset=".847" stop-color="#fff" stop-opacity=".27"/>
+                <stop offset=".875" stop-color="#fff" stop-opacity=".16"/>
+                <stop offset=".900" stop-color="#fff" stop-opacity=".10"/>
+                <stop offset=".925" stop-color="#fff" stop-opacity=".055"/>
+                <stop offset=".951" stop-color="#fff" stop-opacity=".025"/>
+                <stop offset="1"    stop-color="#fff" stop-opacity="0"/>
+              </radialGradient>
+              <mask id="fMask" maskUnits="userSpaceOnUse" x="0" y="0" width="170" height="100">
+                <rect width="170" height="100" fill="url(#fEdge)"/>
+              </mask>
+
+              <linearGradient id="fBase" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0"   stop-color="#50d587"/>
+                <stop offset=".36" stop-color="#4bd384"/>
+                <stop offset=".5"  stop-color="#3acb78"/>
+                <stop offset=".62" stop-color="#2dbb6b"/>
+                <stop offset=".76" stop-color="#20a85b"/>
+                <stop offset=".9"  stop-color="#159a4d"/>
+                <stop offset="1"   stop-color="#14964b"/>
+              </linearGradient>
+
+              <radialGradient id="fLimb" gradientUnits="userSpaceOnUse" cx="148" cy="50" r="92">
+                <stop offset=".70"  stop-color="#14b062" stop-opacity="0"/>
+                <stop offset=".78"  stop-color="#14b062" stop-opacity=".16"/>
+                <stop offset=".87"  stop-color="#14b062" stop-opacity=".52"/>
+                <stop offset=".94"  stop-color="#14b062" stop-opacity=".86"/>
+                <stop offset="1"    stop-color="#14b062" stop-opacity="1"/>
+              </radialGradient>
+
+              <linearGradient id="fSide" gradientUnits="userSpaceOnUse" x1="124" y1="0" x2="170" y2="0">
+                <stop offset="0"   stop-color="#1fa058" stop-opacity="0"/>
+                <stop offset=".35" stop-color="#1fa058" stop-opacity=".07"/>
+                <stop offset=".7"  stop-color="#1fa058" stop-opacity=".36"/>
+                <stop offset="1"   stop-color="#1fa058" stop-opacity=".6"/>
+              </linearGradient>
+
+              <radialGradient id="fSpot" cx=".5" cy=".5" r=".5">
+                <stop offset="0"   stop-color="#8ef0b0" stop-opacity="1"/>
+                <stop offset=".16" stop-color="#8ef0b0" stop-opacity=".89"/>
+                <stop offset=".26" stop-color="#8ef0b0" stop-opacity=".73"/>
+                <stop offset=".42" stop-color="#8ef0b0" stop-opacity=".44"/>
+                <stop offset=".53" stop-color="#8ef0b0" stop-opacity=".28"/>
+                <stop offset=".66" stop-color="#8ef0b0" stop-opacity=".135"/>
+                <stop offset=".79" stop-color="#8ef0b0" stop-opacity=".056"/>
+                <stop offset="1"   stop-color="#8ef0b0" stop-opacity="0"/>
+              </radialGradient>
+
+              <!-- eye fill: the gradient center is pushed up and inward, so the mint rim shows low and outward -->
+              <radialGradient id="eFillL" cx=".552" cy=".446" r=".58">
+                <stop offset="0"    stop-color="#f3fdf6"/>
+                <stop offset=".5"   stop-color="#effcf3"/>
+                <stop offset=".74"  stop-color="#e4f9ec"/>
+                <stop offset=".845" stop-color="#d9f7e5"/>
+                <stop offset=".88"  stop-color="#a5ffd0"/>
+                <stop offset=".935" stop-color="#8bf8c1"/>
+                <stop offset="1"    stop-color="#74e9ad"/>
+              </radialGradient>
+              <radialGradient id="eFillR" cx=".451" cy=".444" r=".58">
+                <stop offset="0"    stop-color="#f3fdf6"/>
+                <stop offset=".5"   stop-color="#effcf3"/>
+                <stop offset=".74"  stop-color="#e4f9ec"/>
+                <stop offset=".845" stop-color="#d9f7e5"/>
+                <stop offset=".88"  stop-color="#a5ffd0"/>
+                <stop offset=".935" stop-color="#8bf8c1"/>
+                <stop offset="1"    stop-color="#74e9ad"/>
+              </radialGradient>
+              <linearGradient id="eTint" x1="0" y1="0" x2="0" y2="1">
+                <stop offset=".38" stop-color="#bdeed0" stop-opacity="0"/>
+                <stop offset="1"   stop-color="#bdeed0" stop-opacity=".6"/>
+              </linearGradient>
+              <radialGradient id="eHi" cx=".43" cy=".29" r=".36">
+                <stop offset="0"   stop-color="#fff" stop-opacity="1"/>
+                <stop offset=".4"  stop-color="#fff" stop-opacity=".62"/>
+                <stop offset="1"   stop-color="#fff" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="eShade" cx=".5" cy=".5" r=".5">
+                <stop offset=".80" stop-color="#0b7a41" stop-opacity="0"/>
+                <stop offset=".90" stop-color="#0b7a41" stop-opacity=".2"/>
+                <stop offset="1"   stop-color="#0b7a41" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <g mask="url(#fMask)">
+              <rect width="170" height="100" fill="url(#fBase)"/>
+              <rect width="170" height="100" fill="url(#fLimb)"/>
+              <rect x="124" width="46" height="100" fill="url(#fSide)"/>
+              <ellipse id="spot" cx="120" cy="21" rx="38" ry="38" fill="url(#fSpot)"/>
+              <rect id="pulse" width="170" height="100" fill="#c2ffda" opacity="0"/>
+            </g>
+
+            <g id="eyeL" transform="translate(79.54 50) rotate(-2.5) scale(.261 .445)">
+              <ellipse cx="-2" cy="2" rx="56" ry="55" fill="url(#eShade)"/>
+              <ellipse rx="50" ry="50" fill="url(#eFillL)"/>
+              <ellipse rx="50" ry="50" fill="url(#eTint)"/>
+              <ellipse rx="50" ry="50" fill="url(#eHi)"/>
+            </g>
+            <g id="eyeR" transform="translate(120.29 50) rotate(3.5) scale(.385 .455)">
+              <ellipse cx="2" cy="2" rx="56" ry="55" fill="url(#eShade)"/>
+              <ellipse rx="50" ry="50" fill="url(#eFillR)"/>
+              <ellipse rx="50" ry="50" fill="url(#eTint)"/>
+              <ellipse rx="50" ry="50" fill="url(#eHi)"/>
+            </g>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const root = document.documentElement;
+  const dock = $('dock'), pillEl = $('pill'), bar = $('bar'), input = $('msg');
+  const face = $('face'), home = $('home'), thread = $('thread');
+  const hintClosed = $('hintClosed'), hintOpen = $('hintOpen');
+  const spot = $('spot'), pulse = $('pulse');
+
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const DEG = Math.PI / 180;
+
+  const mqReduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let reduce = mqReduce.matches;
+  const coarse = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+
+  if (coarse) {
+    hintClosed.textContent = 'Tap the bar to chat';
+    hintOpen.textContent = 'Tap the face to send';
+  }
+
+  /* ------------------------------------------------------------------
+     Viewport: keep the app box on the visual viewport (keyboard safe)
+     ------------------------------------------------------------------ */
+  const vv = window.visualViewport;
+  function syncViewport() {
+    if (vv) {
+      if (Math.abs(vv.scale - 1) < 0.01) {
+        root.style.setProperty('--vv-h', vv.height.toFixed(2) + 'px');
+        root.style.setProperty('--vv-top', vv.offsetTop.toFixed(2) + 'px');
+      }
+    } else {
+      root.style.setProperty('--vv-h', window.innerHeight + 'px');
+    }
+    measure();
+    if (thread.firstChild) thread.scrollTop = thread.scrollHeight;
+  }
+
+  /* ------------------------------------------------------------------
+     Pill: one spring drives the width and the input fade
+     ------------------------------------------------------------------ */
+  let H = 72, wCompact = 331, wOpen = 640;
+  let isOpen = false;
+  const pill = { x: 0, v: 0, t: 0, painted: '' };
+
+  function measure() {
+    H = bar.offsetHeight || 72;
+    const cs = getComputedStyle(dock);
+    const avail = dock.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    wOpen = Math.min(640, avail);
+    wCompact = Math.min(Math.round(H * 4.6), avail);
+    pill.painted = '';
+    paintPill();
+    fontKey = '';
+    updateCaret();
+  }
+
+  function stepPill(dt) {
+    if (pill.x === pill.t && pill.v === 0) return;
+    if (reduce) { pill.x = pill.t; pill.v = 0; return; }
+    const k = 250, c = pill.t ? 21 : 25;
+    const n = 2, h = dt / n;
+    for (let i = 0; i < n; i++) {
+      pill.v += (-k * (pill.x - pill.t) - c * pill.v) * h;
+      pill.x += pill.v * h;
+    }
+    if (Math.abs(pill.x - pill.t) < 0.0006 && Math.abs(pill.v) < 0.006) { pill.x = pill.t; pill.v = 0; }
+  }
+
+  function paintPill() {
+    const w = (wCompact + (wOpen - wCompact) * pill.x).toFixed(2) + 'px';
+    const o = clamp(pill.x, 0, 1).toFixed(3);
+    const key = w + o;
+    if (key === pill.painted) return;
+    pill.painted = key;
+    pillEl.style.setProperty('--w', w);
+    bar.style.setProperty('--open', o);
+  }
+
+  function setOpen(next, opts) {
+    opts = opts || {};
+    if (next === isOpen) {
+      if (next && opts.focus !== false && document.activeElement !== input) input.focus({ preventScroll: true });
+      return;
+    }
+    isOpen = next;
+    pill.t = next ? 1 : 0;
+    bar.classList.toggle('is-open', next);
+    dock.classList.toggle('is-open', next);
+    face.setAttribute('aria-label', next ? 'Send message' : 'Open chat');
+    hintClosed.setAttribute('aria-hidden', String(next));
+    hintOpen.setAttribute('aria-hidden', String(!next));
+    if (next) {
+      if (opts.focus !== false) input.focus({ preventScroll: true });
+      lastType = performance.now();
+      updateCaret();
+      if (!reduce) wide.v += 2.4;     // perk up, then turn to the input
+    } else if (document.activeElement === input) {
+      if (opts.keepFocus) face.focus({ preventScroll: true }); else input.blur();
+    }
+  }
+
+  /* ------------------------------------------------------------------
+     Thread and canned replies
+     ------------------------------------------------------------------ */
+  const replies = [
+    'This is a demo, so there is no real answer here. But I did see your message.',
+    'I am a demo face. I can blink, look around and say a few lines like this one.',
+    'Nothing gets sent anywhere. This reply was written ahead of time.',
+    'Still a demo. Move your mouse or finger and watch my eyes follow.',
+    'I wish I could say more. For now I can only show how the bar feels.'
+  ];
+  let replyIndex = 0;
+  let pending = 0;
+  const timers = new Set();
+
+  const typingEl = document.createElement('div');
+  typingEl.className = 'msg bot typing';
+  typingEl.setAttribute('aria-hidden', 'true');
+  typingEl.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
+
+  function scrollThread() {
+    thread.scrollTo({ top: thread.scrollHeight, behavior: reduce ? 'auto' : 'smooth' });
+  }
+
+  function addMsg(who, text) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + who;
+    const sr = document.createElement('span');
+    sr.className = 'sr-only';
+    sr.textContent = who === 'me' ? 'You: ' : 'Demo: ';
+    const body = document.createElement('span');
+    body.textContent = text;
+    el.append(sr, body);
+    thread.insertBefore(el, typingEl.parentNode === thread ? typingEl : null);
+    dock.classList.add('has-thread');
+    thread.tabIndex = 0;
+    scrollThread();
+  }
+
+  function setThinking(on) {
+    thinking = on;
+    pillEl.classList.toggle('is-thinking', on);
+    thread.setAttribute('aria-busy', String(on));
+    if (on) {
+      thinkStart = performance.now();
+      thread.appendChild(typingEl);
+      scrollThread();
+    } else if (typingEl.parentNode) {
+      typingEl.remove();
+    }
+  }
+
+  function send() {
+    const text = input.value.trim();
+    if (!text) { react('nope'); input.focus({ preventScroll: true }); return; }
+    input.value = '';
+    updateCaret();
+    addMsg('me', text);
+    pending++;
+    setThinking(true);
+    react('sent');
+    const id = setTimeout(() => {
+      timers.delete(id);
+      pending = Math.max(0, pending - 1);
+      if (!pending) setThinking(false);
+      addMsg('bot', replies[replyIndex++ % replies.length]);
+      react('reply');
+    }, reduce ? 900 : rand(1500, 2300));
+    timers.add(id);
+  }
+
+  function goHome() {
+    timers.forEach(clearTimeout);
+    timers.clear();
+    pending = 0;
+    setThinking(false);
+    input.value = '';
+    setOpen(false);
+    react('home');
+    if (!thread.firstChild) return;
+    thread.classList.add('is-leaving');
+    setTimeout(() => {
+      thread.textContent = '';
+      thread.classList.remove('is-leaving');
+      thread.removeAttribute('tabindex');
+      dock.classList.remove('has-thread');
+    }, reduce ? 0 : 200);
+  }
+
+  /* ------------------------------------------------------------------
+     Avatar
+     Eyes sit on a ball. Turning the ball slides both eyes sideways and
+     narrows the leading one, which is what makes the face read as 3D.
+     Units are SVG user units, where the bar height is 100.
+     ------------------------------------------------------------------ */
+  const EYE = {
+    SX: 113.2,          // ball center, 0.568 H in from the right edge
+    R: 45.3,            // ball radius
+    DELTA: 28.5 * DEG,  // half the angle between the eyes
+    YAW_L: 19.5 * DEG,  // full look left (the reference pose)
+    YAW_R: 14.5 * DEG,  // full look right, kept shorter so the eye clears the corner
+    PITCH: 13 * DEG,
+    W0: 39,             // eye width when it faces you
+    H0: 45.6            // eye height
+  };
+  const eyes = [
+    { el: $('eyeL'), s: -1, last: '' },
+    { el: $('eyeR'), s: 1, last: '' }
+  ];
+  const REST = { x: -1, y: 0 };
+
+  const gaze = { x: REST.x, y: REST.y, vx: 0, vy: 0 };
+  const wide = { x: 1, v: 0, t: 1 };      // eye size pop
+  const squint = { x: 0, v: 0, t: 0 };    // 0 open, 1 narrowed
+  const think = { x: 0, v: 0, t: 0 };     // blend for the thinking light
+  let flash = 0;
+
+  let thinking = false, thinkStart = 0;
+  let lastType = -1e9, lastPointer = -1e9;
+  let pointerGaze = { x: 0, y: 0 };
+  let caretGaze = { x: -1, y: 0.1 };
+  let script = null;                      // short scripted look: { until, at(t) }
+  const wander = { x: REST.x, y: REST.y, until: 0, away: false };
+
+  /* blinking */
+  const blinkState = { start: -1, queue: 0, next: performance.now() + rand(1600, 2800) };
+  function blink(count) {
+    const t = performance.now();
+    if (blinkState.start < 0 || t - blinkState.start > 400) blinkState.start = t;
+    blinkState.queue = Math.max(blinkState.queue, (count || 1) - 1);
+  }
+  function blinkAmount(t) {
+    if (blinkState.start < 0) return 0;
+    const e = t - blinkState.start;
+    if (e < 0) return 0;
+    const cl = reduce ? 200 : 75, hold = reduce ? 90 : 35, op = reduce ? 360 : 140;
+    if (e < cl) { const p = e / cl; return p * p; }
+    if (e < cl + hold) return 1;
+    if (e < cl + hold + op) { const p = (e - cl - hold) / op; return 1 - (1 - (1 - p) * (1 - p)); }
+    if (blinkState.queue > 0) { blinkState.queue--; blinkState.start = t + 70; }
+    else blinkState.start = -1;
+    return 0;
+  }
+
+  function spring(s, k, c, dt) {
+    s.v += (-k * (s.x - s.t) - c * s.v) * dt;
+    s.x += s.v * dt;
+  }
+
+  function faceCenter() {
+    const r = bar.getBoundingClientRect();
+    return { x: r.right - H * 0.57, y: r.top + r.height / 2 };
+  }
+
+  function pointAt(px, py) {
+    const c = faceCenter();
+    pointerGaze = {
+      x: Math.tanh((px - c.x) / (H * 2.6)),
+      y: Math.tanh((py - c.y) / (H * 2.4))
+    };
+    lastPointer = performance.now();
+  }
+
+  /* caret position, measured with a canvas so the eyes can watch it */
+  const ruler = document.createElement('canvas').getContext('2d');
+  let fontKey = '', padL = 6, padR = 14;
+  function updateCaret() {
+    if (!fontKey) {
+      const cs = getComputedStyle(input);
+      fontKey = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+      padL = parseFloat(cs.paddingLeft) || 0;
+      padR = parseFloat(cs.paddingRight) || 0;
+    }
+    ruler.font = fontKey;
+    let pos = input.value.length;
+    try { if (input.selectionStart != null) pos = input.selectionStart; } catch (err) { /* keep end */ }
+    const r = input.getBoundingClientRect();
+    const textW = ruler.measureText(input.value.slice(0, pos)).width;
+    const x = clamp(r.left + padL + textW - input.scrollLeft, r.left + padL, r.right - padR);
+    const span = Math.max(1, r.width - padL - padR);
+    const frac = clamp((x - r.left - padL) / span, 0, 1);
+    caretGaze = { x: -(1 - 0.8 * frac), y: 0.14 };
+  }
+
+  function react(kind) {
+    const t = performance.now();
+    if (reduce) return;
+    if (kind === 'sent') {
+      wide.v += 3.4; flash = 1;
+      script = { until: t + 480, at: () => ({ x: -0.3, y: -1 }) };
+    } else if (kind === 'reply') {
+      wide.v += 2.2; blink(2);
+      script = { until: t + 950, at: () => ({ x: -0.55, y: -0.95 }) };
+    } else if (kind === 'nope') {
+      script = { until: t + 460, at: (n) => ({ x: -0.62 + 0.38 * Math.cos((n - t) / 460 * Math.PI * 4), y: 0.1 }) };
+    } else if (kind === 'home') {
+      blink(1);
+      script = { until: t + 700, at: () => ({ x: -1, y: 0.05 }) };
+    }
+    wander.until = 0;
+  }
+
+  function pickWander(t) {
+    const watching = isOpen && document.activeElement === input;
+    const homeX = watching ? caretGaze.x : REST.x;
+    const homeY = watching ? caretGaze.y : REST.y;
+    const goHomeNow = wander.away ? Math.random() < 0.62 : Math.random() < 0.18;
+    let nx, ny;
+    if (goHomeNow) {
+      nx = homeX; ny = homeY; wander.away = false;
+      wander.until = t + rand(1500, 3600);
+    } else {
+      nx = rand(-1, 1);
+      ny = rand(-0.75, 0.6) * (1 - 0.25 * Math.abs(nx));
+      if (Math.random() < 0.3) { nx = rand(0.25, 1); ny = rand(-0.5, 0.2); }
+      wander.away = true;
+      wander.until = t + rand(650, 1900);
+    }
+    if (Math.abs(nx - wander.x) > 0.9 && Math.random() < 0.4) blink(1);
+    wander.x = nx; wander.y = ny;
+  }
+
+  function target(t) {
+    if (script) {
+      if (t < script.until) return script.at(t);
+      script = null;
+    }
+    if (thinking) {
+      const p = (t - thinkStart) / 1000;
+      return { x: -0.3 + 0.55 * Math.sin(p * 2.3), y: -0.82 + 0.14 * Math.sin(p * 4.6 + 1) };
+    }
+    if (isOpen && t - lastType < 1500) return caretGaze;
+    if (t - lastPointer < 1700 && lastPointer > lastType) return pointerGaze;
+    if (t > wander.until) pickWander(t);
+    if (!wander.away && isOpen && document.activeElement === input) return caretGaze;
+    return wander;
+  }
+
+  function paintEyes(t) {
+    const gx = clamp(gaze.x, -1.07, 1.07);
+    const gy = clamp(gaze.y, -1.08, 1.08);
+    const yaw = gx < 0 ? gx * EYE.YAW_L : gx * EYE.YAW_R;
+    const pitch = gy * EYE.PITCH;
+    const closed = blinkAmount(t);
+    const lid = (1 - 0.93 * closed) * (1 - 0.3 * clamp(squint.x, 0, 1));
+    const pop = clamp(wide.x, 0.85, 1.14);
+    for (const e of eyes) {
+      const th = yaw + e.s * EYE.DELTA;
+      const cos = Math.cos(th);
+      const cx = EYE.SX + EYE.R * Math.sin(th);
+      const cy = 50 + EYE.R * Math.sin(pitch) + closed * 2.6 + squint.x * 1.2;
+      const w = EYE.W0 * cos * pop;
+      const h = EYE.H0 * (0.93 + 0.07 * cos) * Math.cos(pitch * 0.8) * pop * lid;
+      const rot = e.s * 3 - gx * 0.5 - gy * e.s * 1.2;
+      const tr = 'translate(' + cx.toFixed(2) + ' ' + cy.toFixed(2) + ') rotate(' + rot.toFixed(2) +
+                 ') scale(' + (w / 100).toFixed(4) + ' ' + (h / 100).toFixed(4) + ')';
+      if (tr !== e.last) { e.last = tr; e.el.setAttribute('transform', tr); }
+    }
+  }
+
+  let lastSpot = '', lastPulse = '';
+  function paintGlow(t) {
+    const a = clamp(think.x, 0, 1);
+    const p = (t - thinkStart) / 1000;
+    const sx = a * Math.sin(p * 3.2) * 10;
+    const sy = a * (2.5 + Math.cos(p * 3.2) * 3.5);
+    const tr = 'translate(' + sx.toFixed(2) + ' ' + sy.toFixed(2) + ')';
+    if (tr !== lastSpot) { lastSpot = tr; spot.setAttribute('transform', tr); }
+    const op = clamp(flash * 0.34 + a * (0.07 + 0.07 * Math.sin(p * 5.2)), 0, 0.5).toFixed(3);
+    if (op !== lastPulse) { lastPulse = op; pulse.setAttribute('opacity', op); }
+  }
+
+  /* ------------------------------------------------------------------
+     Main loop
+     ------------------------------------------------------------------ */
+  let lastT = performance.now();
+  function frame(t) {
+    const dt = clamp((t - lastT) / 1000, 0, 0.034);
+    lastT = t;
+
+    stepPill(dt);
+    paintPill();
+
+    if (reduce) {
+      gaze.x = REST.x; gaze.y = REST.y; gaze.vx = gaze.vy = 0;
+      wide.x = 1; wide.v = 0; squint.x = 0; squint.v = 0; think.x = 0; think.v = 0; flash = 0;
+      script = null;
+    } else {
+      const g = target(t);
+      const n = 2, h = dt / n;
+      for (let i = 0; i < n; i++) {
+        gaze.vx += (-300 * (gaze.x - g.x) - 25 * gaze.vx) * h;
+        gaze.vy += (-300 * (gaze.y - g.y) - 25 * gaze.vy) * h;
+        gaze.x += gaze.vx * h;
+        gaze.y += gaze.vy * h;
+        spring(wide, 260, 17, h);
+        spring(squint, 160, 22, h);
+        spring(think, 60, 15, h);
+      }
+      squint.t = thinking && !script ? 0.55 : 0;
+      think.t = thinking ? 1 : 0;
+      flash *= Math.exp(-dt * 6.5);
+      if (flash < 0.004) flash = 0;
+    }
+
+    if (t > blinkState.next && blinkState.start < 0) {
+      blinkState.start = t;
+      blinkState.queue = !reduce && Math.random() < 0.2 ? 1 : 0;
+      blinkState.next = t + (reduce ? rand(4500, 7000) : rand(2000, 6000));
+    }
+
+    paintEyes(t);
+    paintGlow(t);
+    requestAnimationFrame(frame);
+  }
+
+  /* ------------------------------------------------------------------
+     Events
+     ------------------------------------------------------------------ */
+  // keep focus in the input when the bar or a bar button is pressed
+  bar.addEventListener('mousedown', (e) => { if (e.target !== input) e.preventDefault(); });
+
+  bar.addEventListener('click', (e) => {
+    if (e.target.closest('.home') || e.target.closest('.face')) return;
+    setOpen(true);
+  });
+
+  face.addEventListener('click', () => {
+    if (!isOpen) { setOpen(true); return; }
+    send();
+    if (document.activeElement !== input) input.focus({ preventScroll: true });
+  });
+  face.addEventListener('pointerdown', () => { if (!reduce) wide.v -= 1.6; });
+
+  home.addEventListener('click', goHome);
+
+  bar.addEventListener('submit', (e) => { e.preventDefault(); send(); });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.isComposing) return;
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+    else if (e.key === 'Escape') { e.preventDefault(); setOpen(false, { keepFocus: true }); }
+  });
+  input.addEventListener('focus', () => { bar.classList.add('has-focus'); setOpen(true, { focus: false }); });
+  input.addEventListener('blur', () => { bar.classList.remove('has-focus'); });
+  input.addEventListener('input', () => {
+    lastType = performance.now();
+    updateCaret();
+    if (!reduce) gaze.vy += 1.5;      // a tiny nod on each key
+  });
+  ['keyup', 'click', 'select'].forEach((type) => input.addEventListener(type, () => {
+    lastType = performance.now();
+    updateCaret();
+  }));
+
+  // leaving the bar with nothing typed shrinks it back
+  bar.addEventListener('focusout', () => {
+    setTimeout(() => {
+      if (!isOpen) return;
+      if (!document.hasFocus()) return;
+      if (bar.contains(document.activeElement)) return;
+      if (input.value.trim() === '') setOpen(false);
+    }, 0);
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const el = document.activeElement;
+    const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    if (typing) return;
+    e.preventDefault();
+    setOpen(true);
+  });
+
+  window.addEventListener('pointermove', (e) => pointAt(e.clientX, e.clientY), { passive: true });
+  window.addEventListener('pointerdown', (e) => pointAt(e.clientX, e.clientY), { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    const p = e.touches[0];
+    if (p) pointAt(p.clientX, p.clientY);
+  }, { passive: true });
+  document.documentElement.addEventListener('mouseleave', () => { lastPointer = -1e9; });
+
+  window.addEventListener('resize', syncViewport);
+  if (vv) {
+    vv.addEventListener('resize', syncViewport);
+    vv.addEventListener('scroll', syncViewport);
+  }
+  const onReduce = (e) => { reduce = e.matches; pill.painted = ''; };
+  if (mqReduce.addEventListener) mqReduce.addEventListener('change', onReduce);
+  else if (mqReduce.addListener) mqReduce.addListener(onReduce);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      lastT = performance.now();
+      blinkState.next = lastT + rand(800, 2400);
+    }
+  });
+
+  syncViewport();
+  wander.until = performance.now() + 2400;   // hold the resting pose for a moment first
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

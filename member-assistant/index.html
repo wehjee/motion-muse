@@ -844,6 +844,84 @@
   .has-text .send:active { transform: scale(0.9); }
   .bar:not(.has-text) .send { width: 0; margin-left: 0; }          /* no empty slot while there is nothing to send */
 
+  /* ---------- voice ---------- */
+  /* the microphone sits where send goes: mic while the box is empty, send once there are words */
+  .mic {
+    flex: none; position: relative;
+    display: grid; place-items: center;
+    width: 36px; height: 36px; margin-left: 6px;
+    border-radius: 50%;
+    color: var(--ink);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(238, 242, 239, 0.6) 100%);
+    box-shadow:
+      inset 1px 1.5px 0.5px rgba(255, 255, 255, 0.98),
+      inset -1px -1px 0.5px rgba(255, 255, 255, 0.6),
+      inset 0 -6px 8px -7px rgba(16, 19, 17, 0.16),
+      0 0 0 var(--hair) rgba(16, 19, 17, 0.08),
+      0 2px 5px -2px rgba(16, 19, 17, 0.14);
+    transition: opacity 0.2s ease, transform 0.35s var(--ease), width 0.2s ease, margin 0.2s ease, color 0.2s ease;
+  }
+  .mic::before { content: ""; position: absolute; inset: -5px; }            /* 46px tap area */
+  .mic svg { width: 19px; height: 19px; display: block; position: relative; }
+  .mic:active { transform: scale(0.9); }
+  .bar.has-text:not(.is-listening) .mic { width: 0; margin-left: 0; opacity: 0; transform: scale(0.6); pointer-events: none; }
+  .bar.is-listening .send { width: 0; margin-left: 0; opacity: 0; pointer-events: none; }
+  /* listening: the mic turns to green glass and rings go out from it */
+  .bar.is-listening .mic {
+    color: #fff;
+    background: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
+    box-shadow: inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.22), inset 0.75px 1px 0.5px rgba(214, 255, 230, 0.6), 0 5px 10px -5px rgba(14, 122, 62, 0.75);
+  }
+  .mic::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; pointer-events: none; opacity: 0; }
+  .bar.is-listening .mic::after { box-shadow: 0 0 0 2px rgba(58, 203, 120, 0.55); animation: mic-ring 1.5s ease-out infinite; }
+  .bar.is-hearing .mic::after { animation-duration: 0.75s; }
+  @keyframes mic-ring { from { transform: scale(0.92); opacity: 0.9; } to { transform: scale(1.55); opacity: 0; } }
+
+  /* the gradient ring is awake while it listens and while it talks */
+  .bar.is-listening .bar__ring, .bar.is-speaking .bar__ring { opacity: 1; }
+  .bar.is-listening .bar__ring i, .bar.is-speaking .bar__ring i { animation: ring-flow 9s linear infinite; }
+  .bar.is-listening .bar__glow { opacity: 0.7; animation: listen-breathe 1.7s ease-in-out infinite; }
+  .bar.is-speaking .bar__glow { opacity: 0.5; }
+  @keyframes listen-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
+
+  /* short notes about voice (what it heard, what went wrong) appear just above the suggestions */
+  .toast {
+    max-width: min(100%, 560px);
+    margin: 0 4px 2px;
+    padding: 10px 16px;
+    border-radius: 20px;
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
+    font-size: 14.5px; line-height: 1.35; text-align: center; color: var(--ink);
+    animation: rise 0.35s var(--ease) both;
+  }
+  .toast[hidden] { display: none; }
+
+  /* spoken replies on or off. Shows up once voice has been used. */
+  .voice-toggle {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    z-index: 5;
+    display: none; place-items: center;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    color: var(--ink);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
+  }
+  .voice-toggle::before { content: ""; position: absolute; inset: -4px; }    /* 44px tap area */
+  .voice-toggle svg { width: 19px; height: 19px; display: block; }
+  .has-voice .voice-toggle { display: grid; }
+  .voice-toggle .off { display: none; }
+  .voice-toggle[aria-pressed="false"] .on { display: none; }
+  .voice-toggle[aria-pressed="false"] .off { display: block; }
+  .voice-toggle[aria-pressed="false"] { color: var(--ink-3); }
+
   .avatar { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
   .avatar__halo {
     position: absolute; top: -22%; bottom: -22%;
@@ -934,7 +1012,9 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path { animation: none; }
+    .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path, .toast { animation: none; }
+    .bar.is-listening .mic::after { animation: none; opacity: 0.8; }
+    .bar.is-listening .bar__glow { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
     .meter i, .btn, .opt span, .chip, .send { transition-duration: 0.01s; }
@@ -948,6 +1028,10 @@
 
 <div class="app" id="app">
   <div class="tag">Prototype · sample data</div>
+  <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true" aria-label="Spoken replies">
+    <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.2 6.5a8 8 0 0 1 0 11"/></svg>
+    <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>
+  </button>
 
   <main class="page" id="page" tabindex="-1">
     <div class="column">
@@ -961,6 +1045,7 @@
   </main>
 
   <div class="dock">
+    <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
     <div class="chips" id="chips" role="group" aria-label="Things you can ask"></div>
 
     <form class="bar" id="bar" autocomplete="off" novalidate>
@@ -989,6 +1074,11 @@
         <button class="send" id="send" type="submit" aria-label="Send" tabindex="-1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 19V5.5"/><path d="M6 11.2 12 5.2l6 6"/>
+          </svg>
+        </button>
+        <button class="mic" id="mic" type="button" aria-pressed="false" aria-label="Talk instead of typing">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.8 11.5a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.7v2.8"/>
           </svg>
         </button>
       </div>
@@ -2007,6 +2097,7 @@
     const glide = reduceMotion.matches ? "auto" : "smooth";
     if (edit.act === "help" || edit.act === "tell") {
       const line = edit.act === "tell" ? edit.line : d.help;
+      voice.say(line);
       await speak(turn, line, "say--after");
       turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
       statusEl.textContent = line;
@@ -2016,13 +2107,14 @@
       const row = d.el.querySelector(".row.flash") || d.el;
       row.scrollIntoView({ block: "center", behavior: glide });
       await wait(pace(350));
+      voice.say(line);
       await speak(turn, line, "say--after");
       turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });     // the reply stops just above the chat bar
       statusEl.textContent = line;
       face.lookAtEl(row);
     } else if (edit.act === "confirm") d.confirm();
     else d.skip();
-    } finally { busy = false; }
+    } finally { busy = false; voice.afterTurn(); }
     return true;
   }
 
@@ -2032,6 +2124,7 @@
       draft: (d) => setDraft(d),
       ask: (text) => ask(text),
       say: (text, next) => {
+        voice.say(text);
         speak(turn, text, "say--after");
         const line = turn.lastElementChild;
         requestAnimationFrame(() => keepInView(line, line));
@@ -2046,6 +2139,7 @@
   async function ask(raw) {
     const text = String(raw || "").trim();
     if (!text || busy) return false;
+    voice.hush();                                                          // a new request stops anything being read aloud
     if (window.matchMedia("(pointer: coarse)").matches) input.blur();     // on phones, put the keyboard away so the card has room
     const edit = isUrgent(text) ? null : readEdit(text);   // safety always wins over an open draft
     if (edit) return editInPlace(text, edit);
@@ -2074,6 +2168,9 @@
     await wait(pace(260));
     face.think(true);
     await wait(pace(rand(320, 520)));
+    // in voice mode the sentence is also read aloud. A draft adds what the member can say next.
+    const isDraft = (spec.ui || []).some((u) => u.type === "schedule" || u.type === "refill" || u.type === "handoff");
+    voice.say(spec.say + (isDraft ? " Say confirm, or tell me what to change." : ""));
     await Promise.race([speak(turn, spec.say), wait(pace(380))]);     // the card starts while the sentence is still arriving
     let last = null;
     for (const ui of spec.ui || []) last = (await mount(turn, ui)) || last;
@@ -2086,12 +2183,13 @@
       const line = turn.querySelector(".say");
       if (line) { line.tabIndex = -1; line.focus({ preventScroll: true }); }
     }
-    } finally { busy = false; face.think(false); setThinking(false); }
+    } finally { busy = false; face.think(false); setThinking(false); voice.afterTurn(); }
     return true;
   }
 
   function goHome() {
     if (busy) return;
+    voice.cancel();
     flow.innerHTML = "";
     setDraft(null);
     app.classList.remove("has-flow");
@@ -2147,8 +2245,22 @@
         eyes.ty = -0.72 + Math.sin(s * 4.8) * 0.06;
         eyes.glowTarget = 0.95 + Math.sin(s * 5) * 0.12;
       }
+      if (mode === "listening") {                 // looks straight at you, eyes a little wider, breathing softly
+        const s = t / 1000;
+        eyes.tx = Math.sin(s * 1.1) * 0.05;
+        eyes.ty = -0.04;
+        eyes.openTarget = 1.1;
+        eyes.glowTarget = 1 + Math.sin(s * 3.2) * 0.07;
+      }
+      if (mode === "talking") {                   // a small quick flutter, like speech
+        const s = t / 1000;
+        eyes.tx = -0.15 + Math.sin(s * 0.9) * 0.08;
+        eyes.ty = -0.08;
+        eyes.openTarget = 1 + Math.sin(s * 10) * 0.06 + Math.sin(s * 6.3) * 0.03;
+        eyes.glowTarget = 1 + Math.sin(s * 8) * 0.1;
+      }
       render();
-      const settled = mode !== "thinking" &&
+      const settled = mode !== "thinking" && mode !== "listening" && mode !== "talking" &&
         Math.abs(eyes.tx - eyes.x) < 0.002 && Math.abs(eyes.ty - eyes.y) < 0.002 &&
         Math.abs(eyes.vx) < 0.01 && Math.abs(eyes.vy) < 0.01 &&
         Math.abs(eyes.lidTarget - eyes.lid) < 0.005 && Math.abs(eyes.openTarget - eyes.open) < 0.005 &&
@@ -2213,6 +2325,7 @@
       }, rand(1100, 3400));
     }
 
+    let voiceState = "";
     function setMode(next) {
       mode = next;
       if (next === "idle") { eyes.glowTarget = 0.85; eyes.openTarget = document.activeElement === input ? 1.05 : 1; }
@@ -2224,7 +2337,7 @@
       // visual only: the highlight on the glass slides toward the pointer or finger
       const br = bar.getBoundingClientRect();
       bar.style.setProperty("--mx", clamp(((px - br.left) / br.width) * 100, 6, 74).toFixed(1) + "%");
-      if (reduceMotion.matches || mode === "thinking") return;
+      if (reduceMotion.matches || mode === "thinking" || mode === "listening" || mode === "talking") return;
       mode = "follow";
       lookAtPoint(px, py);
       clearTimeout(followTimer);
@@ -2249,10 +2362,11 @@
     window.addEventListener("touchmove", (e) => { const t = e.touches[0]; if (t) follow(t.clientX, t.clientY); }, { passive: true });
     document.documentElement.addEventListener("pointerleave", () => { if (mode === "follow") setMode("idle"); });
 
-    input.addEventListener("focus", () => { eyes.openTarget = 1.05; if (mode !== "thinking") { setMode(input.value ? "typing" : "idle"); watchCaret(); } });
+    const live = () => mode === "thinking" || mode === "listening" || mode === "talking";
+    input.addEventListener("focus", () => { eyes.openTarget = 1.05; if (!live()) { setMode(input.value ? "typing" : "idle"); watchCaret(); } });
     input.addEventListener("blur", () => { eyes.openTarget = 1; if (mode === "typing") setMode("idle"); wake(); });
     input.addEventListener("input", () => {
-      if (mode === "thinking") return;
+      if (live()) return;
       setMode("typing"); watchCaret();
       if (!reduceMotion.matches) eyes.hopV -= 0.22;
       wake();
@@ -2271,7 +2385,18 @@
       resize() { readSize(); render(); },
       blink,
       lookAtEl,
-      think(on) { if (reduceMotion.matches) return; if (on) setMode("thinking"); else { setMode("idle"); wander(); } },
+      think(on) {
+        if (reduceMotion.matches) return;
+        if (on) setMode("thinking");
+        else { setMode(voiceState === "talking" || voiceState === "listening" ? voiceState : "idle"); wander(); }
+      },
+      // voice: "listening", "talking" or "" (back to normal)
+      voice(state) {
+        voiceState = state;
+        if (reduceMotion.matches || mode === "thinking") return;
+        if (state) setMode(state); else { eyes.openTarget = 1; setMode("idle"); wander(); }
+      },
+      heard() { if (!reduceMotion.matches) { eyes.hopV -= 0.5; wake(); } },      // a small nod each time new words arrive
       sent(el) {
         if (reduceMotion.matches) return;
         eyes.hopV -= 1.5; eyes.openTarget = 0.5; eyes.glowTarget = 1.15; wake();
@@ -2303,11 +2428,13 @@
     const hasText = input.value.trim().length > 0;
     bar.classList.toggle("has-text", hasText);
     sendBtn.tabIndex = hasText ? 0 : -1;
+    $("#mic").tabIndex = hasText && !bar.classList.contains("is-listening") ? -1 : 0;
     avatarBtn.setAttribute("aria-label", hasText ? "Send" : "Start typing");
   }
   async function submit() {
     const text = input.value.trim();
     if (!text || busy) return;
+    voice.typed();                               // typing means answers are shown, not read aloud
     input.value = "";
     syncBar();
     syncChips();
@@ -2315,12 +2442,16 @@
   }
   input.addEventListener("input", () => { syncBar(); syncChips(); });
   bar.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
-  avatarBtn.addEventListener("click", () => { if (input.value.trim()) submit(); else { input.focus(); face.hello(); } });
+  avatarBtn.addEventListener("click", () => {
+    if (voice.busy()) { voice.cancel(); return; }             // tapping the face stops listening or speaking
+    if (input.value.trim()) submit(); else { input.focus(); face.hello(); }
+  });
   homeBtn.addEventListener("click", () => { goHome(); face.blink(1, 60); });
 
   // Page Up, Page Down and the arrow keys scroll the conversation, even while the text box has focus
   document.addEventListener("keydown", (e) => {
     if (e.key === "Tab") root.classList.add("keys");
+    if (e.key === "Escape" && voice.busy()) { voice.cancel(); return; }       // Escape stops listening or speaking
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.target !== input && e.target !== document.body) return;
     const arrows = e.target !== input || !input.value;
@@ -2361,7 +2492,10 @@
   function ringWake() { clearTimeout(ringRest); bar.classList.add("is-lit"); }
   function ringSleep() {
     clearTimeout(ringRest);
-    ringRest = setTimeout(() => { if (!bar.matches(":focus-within") && !bar.classList.contains("is-thinking")) bar.classList.remove("is-lit"); }, 800);
+    ringRest = setTimeout(() => {
+      const awake = bar.matches(":focus-within") || ["is-thinking", "is-listening", "is-speaking"].some((c) => bar.classList.contains(c));
+      if (!awake) bar.classList.remove("is-lit");
+    }, 800);
   }
   function ringPace(rate) {
     const flow = ringWheel && ringWheel.getAnimations ? ringWheel.getAnimations()[0] : null;
@@ -2373,6 +2507,278 @@
   }
   bar.addEventListener("focusin", ringWake);
   bar.addEventListener("focusout", ringSleep);
+
+
+  /* =========================================================
+     7. VOICE
+     Talk instead of typing, and hear the answer.
+     Listening uses the browser's speech service (SpeechRecognition).
+     Speaking uses the built-in voices (speechSynthesis).
+     Nothing here needs a server of ours. In a real health product you
+     would swap both for a speech service you have a privacy agreement with.
+     Rules this follows:
+       - voice never does more than typing can do. "Confirm" still has to be said or tapped
+       - safety words win, exactly as they do for typed text
+       - answers are only read aloud after the member has spoken, and can be switched off
+       - everything spoken is also on screen, and everything heard is shown as text
+     ========================================================= */
+
+  const voice = (() => {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const synth = window.speechSynthesis;
+    const canSpeak = !!(synth && window.SpeechSynthesisUtterance);
+    const micBtn = $("#mic"), toastEl = $("#toast"), toggleBtn = $("#voiceToggle");
+
+    const SAY = {
+      none: "Voice typing is not available in this browser. Tap the text box and use the microphone on your keyboard.",
+      blocked: "I could not use the microphone. Check that it is allowed for this page, or tap the text box and use the microphone on your keyboard.",
+      quiet: "I did not hear anything. Tap the microphone and try again.",
+      nomic: "No microphone was found on this device.",
+      offline: "Voice needs the internet right now. Please type instead.",
+      oops: "Voice stopped working for a moment. Please try again, or type instead.",
+      first: "Voice uses your browser's speech service to turn what you say into text.",
+    };
+
+    let rec = null;                 // the speech recognizer while it is listening
+    let listening = false, speaking = false;
+    let heard = "";                 // the words so far
+    let cancelled = false, failed = false, auto = false;
+    let quietTimer = 0, deafTimer = 0, capTimer = 0, endTimer = 0, toastTimer = 0, speakTimer = 0;
+    let voiceMode = false;          // true after the member speaks, false after they type
+    let autoOk = true;              // false once the browser refuses to listen without a tap
+    let autoMisses = 0;             // times it listened by itself and heard nothing
+    let primed = false, current = null;
+    let wantListen = false;         // it finished speaking a question while the card was still being built
+    let repliesOn = true;
+    try { repliesOn = localStorage.getItem("ma-spoken-replies") !== "off"; } catch (err) { /* private mode */ }
+    let noted = false;
+    try { noted = localStorage.getItem("ma-voice-note") === "1"; } catch (err) { /* private mode */ }
+
+    function toast(text, ms = 6000) {
+      clearTimeout(toastTimer);
+      toastEl.textContent = text;
+      toastEl.hidden = false;
+      toastTimer = setTimeout(() => { toastEl.hidden = true; toastEl.textContent = ""; }, ms);
+    }
+    function clearToast() { clearTimeout(toastTimer); toastEl.hidden = true; toastEl.textContent = ""; }
+
+    function showToggle() {
+      toggleBtn.setAttribute("aria-pressed", String(repliesOn));
+      toggleBtn.setAttribute("aria-label", repliesOn ? "Spoken replies are on" : "Spoken replies are off");
+    }
+
+    /* ---- listening ---- */
+
+    function setListening(on) {
+      listening = on;
+      bar.classList.toggle("is-listening", on);
+      if (!on) bar.classList.remove("is-hearing");
+      micBtn.setAttribute("aria-pressed", String(on));
+      micBtn.setAttribute("aria-label", on ? "Stop listening" : "Talk instead of typing");
+      if (on) { input.placeholder = "Listening..."; ringWake(); ringPace(2); }
+      else { input.placeholder = activeDraft && activeDraft.set ? "Tell me what to change" : "Ask anything"; ringPace(1); ringSleep(); }
+      face.voice(on ? "listening" : speaking ? "talking" : "");
+    }
+
+    function clearTimers() { [quietTimer, deafTimer, capTimer, endTimer].forEach(clearTimeout); }
+
+    function listen(byItself = false) {
+      if (listening || busy) return;
+      hush();
+      if (!Recognition) {
+        if (!byItself) { toast(SAY.none, 8000); input.focus(); }
+        return;
+      }
+      prime();
+      heard = ""; cancelled = false; failed = false; auto = byItself;
+      try {
+        rec = new Recognition();
+        rec.lang = "en-US";
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.maxAlternatives = 1;
+        rec.onresult = onResult;
+        rec.onerror = onError;
+        rec.onend = onEnd;
+        rec.start();
+      } catch (err) {
+        rec = null;
+        if (byItself) autoOk = false; else { toast(SAY.blocked, 8000); input.focus(); }
+        return;
+      }
+      setListening(true);
+      if (!byItself && !noted) {
+        noted = true;
+        try { localStorage.setItem("ma-voice-note", "1"); } catch (err) { /* private mode */ }
+        toast(SAY.first, 7000);
+      } else clearToast();
+      clearTimers();
+      deafTimer = setTimeout(() => { if (listening && !heard) finish(); }, 8000);     // nothing heard: give up politely
+      capTimer = setTimeout(() => { if (listening) finish(); }, 30000);               // never keep the mic open for long
+    }
+
+    function onResult(e) {
+      let text = "";
+      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+      text = text.replace(/\s+/g, " ").trim();
+      if (!text) return;
+      heard = text;
+      input.value = text;                    // what it hears is shown as it arrives
+      syncBar();
+      input.scrollLeft = input.scrollWidth;
+      bar.classList.add("is-hearing");
+      face.heard();
+      clearTimeout(deafTimer);
+      clearTimeout(quietTimer);
+      quietTimer = setTimeout(finish, 1700); // 1.7 seconds of quiet means the member is done
+    }
+
+    function onError(e) {
+      const code = e && e.error;
+      if (code === "aborted" || cancelled) return;
+      failed = true;
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        if (auto) autoOk = false; else { toast(SAY.blocked, 8000); }
+      } else if (code === "no-speech") { if (!auto) toast(SAY.quiet); else autoMisses++; }
+      else if (code === "audio-capture") toast(SAY.nomic);
+      else if (code === "network") toast(SAY.offline);
+      else if (!auto) toast(SAY.oops);
+    }
+
+    // stop listening and use what was heard
+    function finish() {
+      clearTimers();
+      if (!rec) return;
+      try { rec.stop(); } catch (err) { /* already stopped */ }
+      endTimer = setTimeout(onEnd, 1200);    // some phones never report the end, so make sure it ends
+    }
+
+    function onEnd() {
+      if (!rec) return;                      // already handled
+      clearTimers();
+      rec.onresult = rec.onerror = rec.onend = null;
+      rec = null;
+      const text = heard;
+      heard = "";
+      input.value = "";
+      syncBar();
+      syncChips();
+      setListening(false);
+      if (cancelled) return;
+      if (text) {
+        voiceMode = true;
+        autoMisses = 0;
+        app.classList.add("has-voice");
+        showToggle();
+        clearToast();
+        ask(text);
+      } else if (!failed) {
+        if (auto) autoMisses++; else toast(SAY.quiet);
+      }
+    }
+
+    // stop without sending anything
+    function stopListening() {
+      if (!rec) return;
+      cancelled = true;
+      clearTimers();
+      try { rec.abort(); } catch (err) { /* already stopped */ }
+      endTimer = setTimeout(onEnd, 400);
+    }
+
+    /* ---- speaking ---- */
+
+    // phones only let a page speak after a tap, so the first tap on the microphone unlocks it with a silent word
+    function prime() {
+      if (primed || !canSpeak) return;
+      primed = true;
+      try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; synth.speak(u); } catch (err) { /* no voices */ }
+    }
+
+    function pickVoice() {
+      let all = [];
+      try { all = synth.getVoices() || []; } catch (err) { return null; }
+      const english = all.filter((v) => /^en[-_]US/i.test(v.lang));
+      const pool = english.length ? english : all.filter((v) => /^en/i.test(v.lang));
+      const liked = ["Samantha", "Ava", "Allison", "Zoe", "Google US English", "Aria", "Jenny"];
+      for (const name of liked) { const hit = pool.find((v) => v.name.indexOf(name) >= 0); if (hit) return hit; }
+      return pool[0] || null;
+    }
+
+    function setSpeaking(on) {
+      speaking = on;
+      bar.classList.toggle("is-speaking", on);
+      if (on) ringWake(); else ringSleep();
+      if (!listening) face.voice(on ? "talking" : "");
+    }
+
+    function say(text) {
+      if (!voiceMode || !repliesOn || !canSpeak || !text) return false;
+      clearTimeout(speakTimer);
+      try { synth.cancel(); } catch (err) { /* nothing to stop */ }
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "en-US";
+      u.rate = 1.02;
+      const v = pickVoice();
+      if (v) u.voice = v;
+      const done = () => {
+        if (current !== u) return;
+        current = null;
+        clearTimeout(speakTimer);
+        setSpeaking(false);
+        wantListen = true;
+        listenAgain();
+      };
+      u.onend = done;
+      u.onerror = done;
+      current = u;
+      wantListen = false;
+      setSpeaking(true);
+      speakTimer = setTimeout(done, 5000 + text.length * 110);     // in case the end is never reported
+      try { synth.speak(u); } catch (err) { done(); }
+      return true;
+    }
+
+    function hush() {
+      clearTimeout(speakTimer);
+      current = null;
+      wantListen = false;
+      if (canSpeak) { try { synth.cancel(); } catch (err) { /* nothing to stop */ } }
+      if (speaking) setSpeaking(false);
+    }
+
+    // after it asks for a confirm out loud, it listens for the answer by itself (once), so the member can just say it
+    function listenAgain() {
+      if (!wantListen || speaking || busy || listening) return;      // if the card is still being built, afterTurn() tries again
+      wantListen = false;
+      if (!voiceMode || !autoOk || autoMisses > 0 || document.hidden) return;
+      if (!activeDraft || !activeDraft.open) return;
+      listen(true);
+    }
+
+    /* ---- controls ---- */
+
+    micBtn.addEventListener("click", () => { if (listening) finish(); else { autoMisses = 0; listen(false); } });
+    toggleBtn.addEventListener("click", () => {
+      repliesOn = !repliesOn;
+      try { localStorage.setItem("ma-spoken-replies", repliesOn ? "on" : "off"); } catch (err) { /* private mode */ }
+      if (!repliesOn) hush();
+      showToggle();
+      toast(repliesOn ? "Spoken replies are on." : "Spoken replies are off. Answers are still shown.", 3500);
+    });
+    input.addEventListener("input", hush);                                   // typing stops anything being read aloud
+    document.addEventListener("visibilitychange", () => { if (document.hidden) { stopListening(); hush(); } });
+    showToggle();
+
+    return {
+      say,
+      hush,
+      typed() { voiceMode = false; hush(); },
+      afterTurn: listenAgain,                    // called when an answer has finished arriving
+      cancel() { stopListening(); hush(); },
+      busy: () => listening || speaking,
+    };
+  })();
 
   /* ---- start ---- */
   // the app manifest only works from a web address, so skip it when this is opened as a plain file

@@ -528,6 +528,12 @@
   .opts--list span { display: flex; justify-content: space-between; gap: 12px; border-radius: 16px; padding: 0 16px; min-height: 48px; white-space: normal; text-align: left; }
   .opts--list span b { font-weight: 500; }
   .opts--list span em { font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; }
+  /* the voice card */
+  .row--full { grid-template-columns: minmax(0, 1fr); }      /* the label sits above a wide field */
+  .row--full .note { margin-top: 8px; min-height: 18px; }
+  .row[hidden], .btn[hidden], .fine[hidden] { display: none; }
+  .fine.is-bad { color: var(--red-ink); }
+  .fine.is-good { color: var(--green-ink); }
   .math { margin-top: 2px; }
   .math summary { list-style: none; cursor: pointer; padding: 10px 0; min-height: 44px; font-size: 14.5px; font-weight: 600; color: var(--green-ink); display: flex; justify-content: space-between; align-items: center; }
   .math summary::-webkit-details-marker { display: none; }
@@ -1238,6 +1244,10 @@
     if (urgent === "emergency")
       return { say: "If this could be an emergency, call 911 now. If it can wait a little, here are fast ways to get care.", ui: [{ type: "urgent", props: { poison: /swallow|poison|too (many|much)|overdose/.test(t) } }], next: ["Find urgent care near me", "Talk to a person"] };
 
+    // how it sounds. This is a setting for whoever runs the prototype, not a member feature
+    if (/\bvoice (settings?|set ?up|options?)\b|\b(change|pick|choose|set ?up|switch) (your |the |a |my )?voice\b|natural voice|eleven ?labs|how you sound/.test(t))
+      return { say: "Here is how I sound. You can pick a more natural voice.", ui: [{ type: "voice", props: {} }], next: HOME_CHIPS };
+
     if (/id card|member id|insurance card|my card|member number/.test(t))
       return { say: "Here is your member ID card. You can show this at any visit.", ui: [{ type: "idcard", props: {} }], next: ["Schedule a visit", "My deductible"] };
 
@@ -1339,6 +1349,7 @@
     alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3.5 19h17z"/><path d="M12 10v4M12 16.8v.2"/></svg>',
     spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5l2.5 2.5M15 15l2.5 2.5M17.5 6.5 15 9M9 15l-2.5 2.5"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5.5 12.5 4.3 4.3 8.7-9.3"/></svg>',
+    voice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.2 6.5a8 8 0 0 1 0 11"/></svg>',
   };
 
   let seq = 0;
@@ -1808,6 +1819,120 @@
     return m.el;
   };
 
+  /* ---- how it sounds: a setting for whoever runs the prototype ---- */
+  MODULES.voice = (p, api) => {
+    const m = shell("Voice", ICON.voice, '<span class="pill">Prototype setting</span>');
+    const n = m.id;
+    let now = voice.natural.state();
+    let list = now.voices;                 // a few ready made voices, until the account's own list arrives
+    let picked = now.voice;                // "" is the phone's own voice, "other" is a pasted voice ID
+    let saved = false;
+    m.body.innerHTML =
+      `<div class="row row--full part"><span class="row__label" id="${n}-vl">Voice</span>
+         <div class="opts" role="radiogroup" aria-labelledby="${n}-vl" data-voices></div>
+         <span class="note" data-feel></span></div>
+       <div class="row row--full part" data-row="other"><label class="row__label" for="${n}-id">Voice ID</label>
+         <input class="inline-input" id="${n}-id" type="text" maxlength="40" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="Paste the ID" /></div>
+       <div class="row row--full part" data-row="key"><label class="row__label" for="${n}-key">ElevenLabs key</label>
+         <input class="inline-input" id="${n}-key" type="password" maxlength="200" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" /></div>
+       <p class="fine part" data-about>The natural voices come from ElevenLabs and need your own key. Make one there with Text to Speech and Voices (read) turned on, and give it a credit limit. The key is kept in this browser only. Each answer that is read aloud is sent to ElevenLabs and uses your credits.</p>
+       <p class="fine part" data-msg role="status" hidden></p>`;
+    m.actions.innerHTML =
+      `<button class="btn btn--primary part" type="button" data-save>Use this voice</button>
+       <button class="btn btn--quiet part" type="button" data-try>Play a sample</button>
+       <button class="btn btn--text part" type="button" data-forget>Remove the key</button>`;
+    const voicesEl = $("[data-voices]", m.el), feelEl = $("[data-feel]", m.el), idRow = $('[data-row="other"]', m.el), keyRow = $('[data-row="key"]', m.el);
+    const about = $("[data-about]", m.el), msg = $("[data-msg]", m.el), idEl = $(`#${n}-id`, m.el), keyEl = $(`#${n}-key`, m.el);
+    const forgetBtn = $("[data-forget]", m.el), saveBtn = $("[data-save]", m.el), tryBtn = $("[data-try]", m.el);
+    const find = (id) => list.find((v) => v.id === id);
+    const voiceId = () => (picked === "other" ? idEl.value.trim() : picked);
+    const tell = (text, kind = "") => { msg.textContent = text; msg.hidden = !text; msg.className = "fine part" + (kind ? " is-" + kind : ""); };
+    if (picked && !find(picked)) { idEl.value = picked; picked = "other"; }
+    function drawVoices() {
+      const chip = (value, name) => `<label class="opt"><input type="radio" name="${n}-v" value="${esc(value)}"${picked === value ? " checked" : ""} /><span>${esc(name)}</span></label>`;
+      voicesEl.innerHTML = chip("", "Phone voice") + list.map((v) => chip(v.id, v.name)).join("") + chip("other", "Another");
+    }
+    function draw() {
+      const v = find(picked);
+      feelEl.textContent = picked === "" ? "The voice built into this phone or computer."
+        : picked === "other" ? "Any voice from ElevenLabs. Paste its voice ID."
+        : ((v && v.feel) || "A voice from ElevenLabs.") + (v && v.lib ? " From the ElevenLabs voice library, so it needs a paid plan." : "");
+      idRow.hidden = picked !== "other";
+      keyRow.hidden = about.hidden = picked === "";
+      keyEl.placeholder = now.hasKey ? "Saved in this browser" : "Paste your key";
+      forgetBtn.hidden = !now.hasKey;
+    }
+    drawVoices();
+    draw();
+    m.el.addEventListener("change", (e) => {
+      if (e.target.name === `${n}-v`) { picked = e.target.value; morph(m.el, draw); tell(""); }
+      if (e.target === keyEl) loadMine(keyEl.value.trim());
+    });
+    [idEl, keyEl].forEach((el) => el.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } }));
+
+    // with a key, show the voices that are really in that ElevenLabs account
+    let asked = "";
+    async function loadMine(key) {
+      if (key ? key.length < 20 : !now.hasKey) return;
+      if (asked === (key || "saved")) return;
+      asked = key || "saved";
+      const mine = await voice.natural.list(key);
+      if (!mine || saved || !m.el.isConnected) return;
+      const want = voiceId();
+      list = mine.concat(now.voices.filter((v) => !mine.some((x) => x.id === v.id)).map((v) => Object.assign({ lib: true }, v)));
+      if (picked !== "" && want && find(want)) picked = want;
+      else if (picked !== "" && picked !== "other") { idEl.value = picked; picked = "other"; }
+      morph(m.el, () => { drawVoices(); draw(); });
+    }
+    loadMine("");
+
+    // check what is on the card. Returns what to play, or null after saying what is missing
+    function read() {
+      const id = voiceId(), key = keyEl.value.trim();
+      if (picked === "") return { id: "", key: "" };                    // the phone's own voice needs nothing
+      if (!id) { tell("Paste the voice ID first.", "bad"); idEl.focus(); return null; }
+      if (!/^[A-Za-z0-9]{8,40}$/.test(id)) { tell("That does not look like a voice ID. It is a short code of letters and numbers.", "bad"); idEl.focus(); return null; }
+      if (!key && !now.hasKey) { tell("Paste your ElevenLabs key first.", "bad"); keyEl.focus(); return null; }
+      return { id, key };
+    }
+    let working = false;
+    async function play(andSave) {
+      if (working || saved) return;
+      const pick = read();
+      if (!pick) return;
+      working = true;
+      saveBtn.disabled = tryBtn.disabled = true;
+      tell(pick.id ? "Getting the voice ready..." : "Playing...");
+      const heard = await voice.natural.sample(pick.key, pick.id);       // the tap that got us here is what lets a phone play sound
+      working = false;
+      saveBtn.disabled = tryBtn.disabled = false;
+      if (!heard.ok) { tell(heard.why + (andSave ? " Nothing was changed." : ""), "bad"); return; }
+      if (!andSave) { tell("That is how it sounds.", "good"); return; }
+      voice.natural.save(pick.key, pick.id);
+      saved = true;
+      keyEl.value = "";                                   // the key is not left sitting in the page
+      const v = find(pick.id), name = !pick.id ? "The phone's own voice" : v ? `${v.name}, from ElevenLabs` : "Your ElevenLabs voice";
+      morph(m.el, () => {
+        m.pill().textContent = "Saved"; m.pill().className = "pill pill--ok";
+        m.body.innerHTML = `<div class="done part" style="padding-bottom:4px"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>Voice saved</b><span>${esc(name)}</span></div></div>`;
+        m.actions.innerHTML = `<button class="btn btn--quiet part" type="button" data-again>Change it</button>`;
+        $("[data-again]", m.el).addEventListener("click", () => api.ask("Voice settings"));
+      });
+      landFocus(m.el);
+      api.say("Saved. I will use this voice when you talk to me. Tap the microphone to try it.", HOME_CHIPS, true);     // shown, not spoken: the sample is still playing
+    }
+    saveBtn.addEventListener("click", () => play(true));
+    tryBtn.addEventListener("click", () => play(false));
+    forgetBtn.addEventListener("click", () => {
+      voice.natural.forget();
+      now = voice.natural.state();
+      list = now.voices; picked = ""; keyEl.value = ""; idEl.value = ""; asked = "";
+      morph(m.el, () => { drawVoices(); draw(); });
+      tell("The key is removed from this browser. I am using the phone's voice.", "good");
+    });
+    return m.el;
+  };
+
   /* ---- talk to a person ---- */
   MODULES.handoff = (p, api) => {
     const m = shell("Talk to a person", ICON.phone, '<span class="pill">Draft</span>');
@@ -2170,8 +2295,8 @@
     return {
       draft: (d) => setDraft(d),
       ask: (text) => ask(text),
-      say: (text, next) => {
-        voice.say(text);
+      say: (text, next, silent) => {
+        if (!silent) voice.say(text);
         speak(turn, text, "say--after");
         const line = turn.lastElementChild;
         requestAnimationFrame(() => keepInView(line, line));
@@ -2583,6 +2708,41 @@
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const synth = window.speechSynthesis;
     const canSpeak = !!(synth && window.SpeechSynthesisUtterance);
+
+    /* A more natural voice (optional). ElevenLabs turns each short answer into sound.
+       Whoever runs the prototype pastes their own key in the Voice card. The key is kept in this browser
+       and goes to ElevenLabs and nowhere else. It is never part of this file.
+       If anything goes wrong the phone's own voice is used, so an answer is never lost. */
+    const NATURAL = {
+      api: "https://api.elevenlabs.io/",
+      models: ["eleven_v4", "eleven_multilingual_v2"],      // first choice first. If ElevenLabs refuses one, the next is tried and the one that works is remembered
+      format: "mp3_44100_128",
+      settings: {"stability": 0.5, "similarity_boost": 0.75},              // only the two settings every model accepts
+      sample: "Hi, I am your health plan assistant. I can book a visit, check a claim, or find a doctor near you.",
+      // A few ready made voices, described by how they sound. The Voice card swaps in the account's own list when it has a key.
+      voices: [
+        {"id": "QtY3JBOUKEB5xzrRfOKc", "name": "Maisie", "feel": "Warm, friendly and casual.", "lib": true},
+        {"id": "g7LVvkPWALzPxOQbF6OE", "name": "Jade", "feel": "Upbeat and natural.", "lib": true},
+        {"id": "OYTbf65OHHFELVut7v2H", "name": "Hope", "feel": "Bright and uplifting.", "lib": true},
+        {"id": "kdmDKE6EkgrWrrykO9Qt", "name": "Alexandra", "feel": "Chatty and very lifelike.", "lib": true},
+        {"id": "OZ0L6eISlOejga3XjDFt", "name": "Talia", "feel": "Warm, soft and calm.", "lib": true},
+        {"id": "l7kNoIfnJKPg7779LI2t", "name": "Eddie", "feel": "Helpful and comforting. A man's voice.", "lib": true},
+      ],
+    };
+    const SILENCE = "data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+    const WHY = {
+      key: "ElevenLabs did not accept that key.",
+      scope: "That key is not allowed to make speech. Turn on Text to Speech for it at ElevenLabs.",
+      credits: "The ElevenLabs account is out of credits.",
+      voice: "ElevenLabs could not find that voice.",
+      plan: "That voice needs a paid ElevenLabs plan.",
+      paused: "ElevenLabs has paused free use from this network. It needs a paid plan or another network.",
+      busy: "ElevenLabs is busy right now. Please try again.",
+      slow: "The natural voice took too long to arrive.",
+      offline: "I could not reach ElevenLabs. Check the connection.",
+      blocked: "The phone did not let the sound play.",
+      error: "The natural voice did not work.",
+    };
     const micBtn = $("#mic"), toastEl = $("#toast"), toggleBtn = $("#voiceToggle");
     // iPhones and iPads need extra care: their voice list is unreliable, and listening right after speaking can go deaf
     const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -2600,6 +2760,7 @@
       first: "Your browser's speech service turns your voice into text. This prototype does not save it. Please do not say real health details.",
       aloud: "I will read answers out loud when you talk to me. Tap the speaker at the top to turn that off.",
       silent: "No sound? Check the silent switch on the side of your phone.",
+      volume: "No sound? Turn up the volume on your phone.",
     };
 
     let rec = null;                 // the speech recognizer while it is listening
@@ -2619,6 +2780,15 @@
     let repliesOn = true, noted = false, toldAloud = false, toldSilent = false;
     const recall = (key) => { try { return localStorage.getItem(key); } catch (err) { return null; } };
     const remember = (key, value) => { try { localStorage.setItem(key, value); } catch (err) { /* private mode */ } };
+    const forget = (key) => { try { localStorage.removeItem(key); } catch (err) { /* private mode */ } };
+    let natKey = recall("ma-eleven-key") || "", natVoice = recall("ma-eleven-voice") || "", natModel = recall("ma-eleven-model") || "";
+    const player = typeof Audio === "function" ? new Audio() : null;      // one player, kept for good: phones only trust a player that a tap has touched
+    let gentle = true;              // how the player is made ready during a tap (see ready())
+    let natOff = false, natMisses = 0;      // the natural voice failed: use the phone's voice until the setting is changed
+    const clips = new Map();        // sentences already turned into sound, so a repeat costs nothing
+    let clipsKey = "";
+    let toldVolume = recall("ma-voice-volume") === "1";
+    const naturalOn = () => !!(player && natKey && natVoice && !natOff);
     repliesOn = recall("ma-spoken-replies") !== "off";
     noted = recall("ma-voice-note") === "1";
     toldAloud = recall("ma-voice-aloud") === "1";
@@ -2807,9 +2977,22 @@
 
     // phones only let a page speak after a tap, so the first tap on the microphone unlocks it with a silent word
     function prime() {
-      if (primed || !canSpeak) return;
-      primed = true;
-      try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; u.lang = "en-US"; synth.speak(u); } catch (err) { /* no voices */ }
+      if (!primed && canSpeak) {
+        primed = true;
+        try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; u.lang = "en-US"; synth.speak(u); } catch (err) { /* no voices */ }
+      }
+      if (naturalOn()) ready(false);
+    }
+    // The natural voice arrives a moment after the tap, and phones only let a tap start sound.
+    // So during each tap the player is touched, which is what lets it play by itself a moment later.
+    // On a microphone tap this is done the quiet way (load), so no sound runs while the microphone opens.
+    // If a phone ever refuses to play after that, the surer way is used from then on: a blink of silence.
+    function ready(sure) {
+      if (!player || !player.paused) return;
+      try {
+        if (sure || !gentle) { player.src = SILENCE; const p = player.play(); if (p && p.catch) p.catch(() => {}); }
+        else player.load();
+      } catch (err) { /* the answer falls back to the phone's voice */ }
     }
 
     // On iPhone the system picks the voice for the language (its list can hold joke voices and loads late).
@@ -2834,6 +3017,7 @@
         .replace(/\bDr\.\s/g, "Doctor ")
         .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b(?!\w)/g, (m) => LONG[m])
         .replace(/\s·\s/g, ", ")
+        .replace(/[\[\]<>*_#`]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
     }
@@ -2850,53 +3034,245 @@
     // reading aloud is a nice extra. If it ever fails, the answer on screen must not be affected
     function say(text) {
       try { return sayNow(text); }
-      catch (err) { current = null; clearTimeout(speakTimer); if (speaking) setSpeaking(false); return false; }
+      catch (err) { quiet(); current = null; if (speaking) setSpeaking(false); return false; }
     }
 
     function sayNow(text) {
       if (listening) stopListening();        // an answer is arriving: never listen through it, spoken or not
-      if (!voiceMode || !repliesOn || !canSpeak || !text) return false;
+      if (!voiceMode || !repliesOn || !text || !(canSpeak || naturalOn())) return false;
+      const job = begin(() => { wantListen = true; listenAgain(); });
+      const fine = naturalOn();
+      if (fine) {
+        playNatural(job, text, natKey, natVoice).then((why) => {
+          if (current !== job) return;       // it was stopped or replaced
+          if (!why) { natMisses = 0; return; }
+          trouble(why);
+          playPhone(job, text);              // the answer is still read aloud, by the phone's own voice
+        });
+      } else playPhone(job, text);
+      if (!toastEl.hidden && toastEl.textContent === SAY.first) { /* let the privacy note be read first */ }
+      else if (!toldAloud) { toldAloud = true; remember("ma-voice-aloud", "1"); toast(SAY.aloud, 8000); }
+      else if (apple && !fine && !toldSilent) { toldSilent = true; remember("ma-voice-silent", "1"); toast(SAY.silent, 7000); }
+      else if (apple && fine && !toldVolume) { toldVolume = true; remember("ma-voice-volume", "1"); toast(SAY.volume, 7000); }     // the silent switch does not mute this voice
+      return true;
+    }
+
+    // One thing is said at a time. A job is the sentence being said now. When it ends, `after` runs.
+    function begin(after) {
+      quiet();
+      const job = { after, stop: null, u: null };
+      job.done = () => {
+        if (current !== job) return;
+        current = null;
+        clearTimeout(speakTimer);
+        if (player) player.onended = player.onerror = player.onpause = null;
+        spokeEnd = performance.now();
+        setSpeaking(false);
+        if (job.after) job.after();
+      };
+      current = job;
+      wantListen = false;
+      setSpeaking(true);
+      return job;
+    }
+
+    // stop whatever sound is on its way or playing. The talking state is left to the caller
+    function quiet() {
       clearTimeout(speakTimer);
       clearTimeout(gapTimer);
+      if (current && current.stop) { try { current.stop.abort(); } catch (err) { /* already over */ } }
+      if (player) {
+        player.onended = player.onerror = player.onpause = null;
+        try { if (!player.paused && player.src !== SILENCE) player.pause(); } catch (err) { /* nothing playing */ }     // the blink of silence is left to finish
+      }
+    }
+
+    function playPhone(job, text) {
+      if (!canSpeak) { job.done(); return; }
       const u = new SpeechSynthesisUtterance(toSpeech(text));
       u.lang = "en-US";
       u.rate = 1.02;
       const v = pickVoice();
       if (v) { try { u.voice = v; } catch (err) { /* keep the default voice */ } }
-      const done = () => {
-        if (current !== u) return;
-        current = null;
-        clearTimeout(speakTimer);
-        spokeEnd = performance.now();
-        setSpeaking(false);
-        wantListen = true;
-        listenAgain();
-      };
-      u.onend = done;
-      u.onerror = done;
-      current = u;                           // keep hold of it so the browser does not drop it mid sentence
-      wantListen = false;
-      setSpeaking(true);
-      speakTimer = setTimeout(done, 5000 + text.length * 110);     // in case the end is never reported
+      u.onend = job.done;
+      u.onerror = job.done;
+      job.u = u;                             // keep hold of it so the browser does not drop it mid sentence
+      clearTimeout(speakTimer);
+      speakTimer = setTimeout(job.done, 5000 + text.length * 110);     // in case the end is never reported
       // stopping and starting in the same breath can swallow the new sentence on Safari, so leave a short gap
       let gap = 0;
       try { if (synth.speaking || synth.pending) { synth.cancel(); gap = 120; } } catch (err) { /* nothing to stop */ }
-      const go = () => { if (current === u) { try { synth.speak(u); } catch (err) { done(); } } };
+      const go = () => { if (current === job) { try { synth.speak(u); } catch (err) { job.done(); } } };
       if (gap) setTimeout(go, gap); else go();
-      if (!toastEl.hidden && toastEl.textContent === SAY.first) { /* let the privacy note be read first */ }
-      else if (!toldAloud) { toldAloud = true; remember("ma-voice-aloud", "1"); toast(SAY.aloud, 8000); }
-      else if (apple && !toldSilent) { toldSilent = true; remember("ma-voice-silent", "1"); toast(SAY.silent, 7000); }
-      return true;
+    }
+
+    // Ask ElevenLabs for the sentence and play it. Resolves to "" when it is playing (or was stopped),
+    // or to a short reason when it could not play, so the caller can fall back to the phone's voice.
+    async function playNatural(job, text, key, voiceId) {
+      if (key !== clipsKey) { clips.forEach((url) => URL.revokeObjectURL(url)); clips.clear(); clipsKey = key; }
+      const id = voiceId + "\n" + text;
+      let url = clips.get(id);
+      if (!url) {
+        const stop = new AbortController();
+        let slow = false;
+        job.stop = stop;
+        const limit = setTimeout(() => { slow = true; stop.abort(); }, 7000);      // an answer must never hang on the network
+        let got;
+        try { got = await fetchClip(toSpeech(text).slice(0, 900), key, voiceId, stop.signal); }
+        catch (err) { got = { why: slow ? "slow" : "offline" }; }
+        clearTimeout(limit);
+        job.stop = null;
+        if (current !== job) return "";      // it was told to stop while the sound was on its way
+        if (got.why) return got.why;
+        url = URL.createObjectURL(new Blob([got.blob], { type: "audio/mpeg" }));
+        clips.set(id, url);
+        if (clips.size > 24) { const first = clips.keys().next().value; URL.revokeObjectURL(clips.get(first)); clips.delete(first); }
+      }
+      const started = await new Promise((resolve) => {
+        player.onended = job.done;
+        player.onerror = () => resolve(false);
+        try {
+          player.src = url;
+          const p = player.play();           // right away: waiting for the sound to load first can lose the tap's permission
+          if (p && p.then) p.then(() => resolve(true), () => resolve(false)); else resolve(true);
+        } catch (err) { resolve(false); }
+        setTimeout(() => resolve(false), 4000);
+      });
+      if (current !== job) return "";
+      if (!started) {
+        player.onended = player.onerror = player.onpause = null;
+        try { player.pause(); } catch (err) { /* not playing */ }
+        gentle = false;                      // from now on a tap makes the player ready the surer way
+        return "blocked";
+      }
+      player.onerror = job.done;
+      player.onpause = () => { if (!player.ended) job.done(); };       // paused from outside the page: a call, or the lock screen
+      const secs = isFinite(player.duration) && player.duration > 0 ? player.duration : 3 + text.length * 0.09;
+      clearTimeout(speakTimer);
+      speakTimer = setTimeout(job.done, secs * 1000 + 2500);       // in case the end is never reported
+      return "";
+    }
+
+    // one request per sentence. A model that ElevenLabs refuses is skipped, and the one that works is remembered
+    async function fetchClip(text, key, voiceId, signal) {
+      const order = natModel && NATURAL.models.indexOf(natModel) > 0 ? [natModel].concat(NATURAL.models.filter((x) => x !== natModel)) : NATURAL.models;
+      let why = "error";
+      for (const model of order) {
+        const res = await fetch(NATURAL.api + "v1/text-to-speech/" + encodeURIComponent(voiceId) + "?output_format=" + NATURAL.format, {
+          method: "POST",
+          signal,
+          headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/mpeg" },
+          body: JSON.stringify({ text, model_id: model, voice_settings: NATURAL.settings }),
+          referrerPolicy: "no-referrer",
+          credentials: "omit",
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          if (!blob.size) return { why: "error" };
+          if (model !== natModel) { natModel = model; remember("ma-eleven-model", model); }
+          return { blob };
+        }
+        const no = await whyNot(res);
+        why = no.why;
+        if (!no.model) break;                // only a refused model is worth another try
+      }
+      return { why };
+    }
+
+    // read ElevenLabs' answer when it says no, and turn it into one of a few plain reasons
+    async function whyNot(res) {
+      let code = "";
+      try {
+        const body = await res.json(), d = body && body.detail;
+        code = typeof d === "string" ? d : Array.isArray(d) ? d.map((x) => (x && (x.msg || x.type)) || "").join(" ") : d ? [d.code, d.status, d.type, d.message].filter(Boolean).join(" ") : "";
+      } catch (err) { /* no details */ }
+      const s = res.status, vague = s === 400 || s === 422;
+      let why = "error";
+      if (/quota|credit/i.test(code)) why = "credits";
+      else if (/unusual.activity/i.test(code)) why = "paused";
+      else if (/voice_not_found|voice.*(not found|does not exist)/i.test(code) || (s === 404 && !/model/i.test(code)) || (vague && /voice/i.test(code) && !/model/i.test(code))) why = "voice";
+      else if (/paid_plan|payment_required|free_users|subscription|upgrade|library voice/i.test(code) || s === 402) why = "plan";
+      else if (/missing_permission|permission/i.test(code)) why = "scope";
+      else if (s === 401 || /invalid_api_key|missing_api_key/i.test(code)) why = "key";
+      else if (s === 403) why = "scope";
+      else if (s === 408 || s === 409 || s === 425 || s === 429 || s >= 500 || /busy|too_many|rate_limit|concurrent/i.test(code)) why = "busy";
+      // a refused model is worth one more try with the next model. So is a plain "bad request" that does not say why
+      return { why, model: (/model/i.test(code) && why !== "key" && why !== "credits" && why !== "paused") || (vague && why === "error") };
+    }
+
+    // the natural voice failed during a real answer: say why once, and stop trying when it cannot get better by itself
+    function trouble(why) {
+      natMisses++;
+      const lasting = why === "key" || why === "scope" || why === "credits" || why === "voice" || why === "plan" || why === "paused";
+      if (lasting || natMisses >= 3) natOff = true;
+      toast(WHY[why] + " I am using the phone's voice" + (natOff ? '. Ask for "voice settings" to fix it.' : " for this answer."), 8000);
     }
 
     function hush() {
-      clearTimeout(speakTimer);
-      clearTimeout(gapTimer);
+      quiet();
       current = null;
       wantListen = false;
       if (canSpeak) { try { if (synth.speaking || synth.pending) synth.cancel(); } catch (err) { /* nothing to stop */ } }
       if (speaking) { spokeEnd = performance.now(); setSpeaking(false); }
     }
+
+    // a voice from the account's list, in the few words the Voice card shows
+    function plain(v) {
+      const parts = String(v.name).split(/\s+[-–|:]\s+/), L = v.labels || {};
+      const feel = parts.slice(1).join(", ") || L.descriptive || L.description || "";
+      const said = L.accent ? String(L.accent).replace(/[-_]/g, " ") : "", accent = said.charAt(0).toUpperCase() + said.slice(1);
+      const words = [feel, accent && feel.toLowerCase().indexOf(accent.toLowerCase()) < 0 ? accent + " accent" : ""].filter(Boolean).join(". ");
+      const line = words.replace(/[.\s]+$/, "").slice(0, 90);
+      return { id: String(v.voice_id), name: parts[0].slice(0, 22), feel: line ? line.charAt(0).toUpperCase() + line.slice(1) + "." : "" };
+    }
+
+    // The Voice card: what is set now, the account's voices, a sample to listen to, and saving or removing the setting.
+    const natural = {
+      state: () => ({ hasKey: !!natKey, voice: natKey ? natVoice : "", voices: NATURAL.voices }),
+      // the voices in the ElevenLabs account that the key belongs to, or null when they cannot be read
+      async list(key) {
+        for (const path of ["v2/voices?page_size=100", "v1/voices"]) {
+          try {
+            const stop = new AbortController(), limit = setTimeout(() => stop.abort(), 8000);
+            const res = await fetch(NATURAL.api + path, { headers: { "xi-api-key": key || natKey }, signal: stop.signal, referrerPolicy: "no-referrer", credentials: "omit", cache: "no-store" });
+            const body = res.ok ? await res.json() : null;
+            clearTimeout(limit);
+            const all = body && Array.isArray(body.voices) ? body.voices.filter((v) => v && /^[A-Za-z0-9]{8,40}$/.test(v.voice_id) && v.name && !v.is_legacy) : [];
+            if (all.length) return all.slice(0, 24).map(plain);
+          } catch (err) { /* try the older address, then give up quietly */ }
+        }
+        return null;
+      },
+      // Plays one sentence so the voice can be judged. Called from a tap, which is what lets a phone play sound.
+      async sample(key, voiceId) {
+        if (listening) stopListening();
+        if (!voiceId) {
+          if (!canSpeak) return { ok: false, why: "This browser has no voice of its own." };
+          prime();
+          playPhone(begin(null), NATURAL.sample);
+          return { ok: true };
+        }
+        if (!player) return { ok: false, why: "This browser cannot play the natural voice." };
+        quiet();
+        ready(true);
+        const job = begin(null);
+        const why = await playNatural(job, NATURAL.sample, key || natKey, voiceId);
+        if (why && current === job) job.done();
+        return why ? { ok: false, why: WHY[why] } : { ok: true };
+      },
+      save(key, voiceId) {
+        if (key) { natKey = key; remember("ma-eleven-key", key); }
+        natVoice = voiceId || "";
+        if (natVoice) remember("ma-eleven-voice", natVoice); else forget("ma-eleven-voice");
+        natOff = false; natMisses = 0;
+      },
+      forget() {
+        natKey = ""; natVoice = ""; natModel = "";
+        forget("ma-eleven-key"); forget("ma-eleven-voice"); forget("ma-eleven-model");
+        clips.forEach((url) => URL.revokeObjectURL(url)); clips.clear(); clipsKey = "";
+      },
+    };
 
     // After it asks something out loud about a draft, the member will want to answer.
     // Where the browser allows it, listen once by itself after a short gap. Otherwise the mic pulses to invite a tap.
@@ -2942,6 +3318,7 @@
       busy: () => listening || speaking,
       // Enter while it listens: send what was heard now, by the voice rules
       sendHeard() { if (!listening || stopped || !heard) return false; finish(); return true; },
+      natural,
       // what to say after a draft, in words that match what the microphone will do next
       hint: () => (autoOk && autoMisses === 0 ? " Tell me what to change, or say confirm." : " Tap the microphone to change something or to confirm."),
     };

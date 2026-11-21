@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <!--
-  Member assistant (prototype)
-  A health plan assistant where the answer is the interface.
+  Carely (prototype)
+  A health plan member assistant where the answer is the interface.
   The member types what they need. The assistant replies with a short
   sentence and a generated card they can check, change and confirm.
-  One file, no build step, no network requests. All data is made up.
+  One file, no build step. All data is made up.
+  No network requests, unless a natural voice is switched on in the Voice card
+  (then each spoken answer is sent to ElevenLabs to be turned into speech).
 
   UI TYPE: mobile-first web app (chat bar + generated cards)
 
@@ -15,16 +17,20 @@
     Hairline ............. rgba(16,19,17,0.08)
     Green (actions) ...... #0e7a3e   Green text #0b6b35   Green wash #e8f6ed
     Amber / red .......... #8a5a00 on #fdf3dc / #b3261e on #fdecea
-    Chat bar ............. white glass (blurred, 66 to 88% white) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
+    Chat bar ............. Liquid Glass capsule (blurred, 64 to 84% of a near white) with a green avatar (#8ef0b0 / #3acb78 / #14964b)
+    Gradient border ...... at rest a hairline, mint to soft green to emerald. On focus and while thinking a 1.5px ring
+                           of greens (#0e7a3e / #14964b / #2fbf71 / #6fe39d / #b9f6d0) that travels around the capsule, with a soft glow
+    Glass ................ chat bar, suggestion chips, the top tag and the lens in the two way switch. Cards are plain white sheets
 
   TYPOGRAPHY
     Assistant voice ...... system serif (New York / Georgia), 20 to 22px
-    Interface ............ system sans, 16px base, 13px labels
+    Interface ............ system sans, 16px base, 13px labels. Weights: 400 text, 500 emphasis, 600 names, totals and buttons
     Greeting ............. system serif, 32 to 46px
 
   SHAPES
-    Card radius 26px, control radius 16px, chips full pill
-    Bar height 68px desktop / 60px phone, radius 0.34 of height
+    Card radius 28px (26px phone), buttons and chips are capsules, tiles 16px
+    Bar height 60px desktop / 56px phone, a full capsule (radius is half the height)
+    Chips 36px tall, choice chips 38px, each with a 44px tall tap area
     Column max width 640px, cards max width 440px
 -->
 <html lang="en">
@@ -37,10 +43,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="Assistant" />
+<meta name="apple-mobile-web-app-title" content="Carely" />
 <link rel="apple-touch-icon" href="icon-180.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-<title>Member assistant</title>
+<title>Carely</title>
 <style>
   :root {
     --page: #ffffff;
@@ -49,7 +55,7 @@
     --ink-3: #6b716c;
     --wash: #f4f5f2;
     --wash-2: #eceee9;
-    --line: rgba(16, 19, 17, 0.08);
+    --line: rgba(16, 19, 17, 0.07);
     --green: #0e7a3e;
     --green-ink: #0b6b35;
     --green-wash: #e8f6ed;
@@ -60,12 +66,33 @@
     --green-hi: #8ef0b0;
     --green-mid: #3acb78;
     --green-lo: #14964b;
-    --h: 68px;
+    --h: 60px;
     --gutter: 20px;
     --kb: 0px;
+    --pad: 20px;                 /* card padding */
+    --r-card: 28px;              /* card radius. Controls inside are capsules or 16px tiles */
+    --hair: 1px;                 /* finest line the screen can draw */
+    --rim: rgba(16, 19, 17, 0.09);
+    --ring-rest: rgba(26, 128, 76, 0.2);       /* the quiet middle of the resting gradient hairline */
+    --ring-rest-o: 0.66;                       /* a 1px line carries more weight than a true hairline, so it is drawn lighter */
     --ease: cubic-bezier(0.22, 0.9, 0.3, 1);
+    --spring: cubic-bezier(0.3, 1.22, 0.46, 1);  /* a small overshoot, like something with weight settling */
     --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --serif: ui-serif, "New York", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+
+    /* Liquid Glass recipe, shared by everything that floats (chat bar, chips, tag) */
+    --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.56) 100%);
+    --glass-rim:
+      inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.9),
+      inset 1px 1.5px 0.5px -0.5px #fff,                              /* specular, strongest top left */
+      inset -0.75px -1px 0.5px -0.5px rgba(255, 255, 255, 0.72);      /* and a fainter one bottom right */
+    --glass-depth: inset 0 -7px 9px -8px rgba(16, 19, 17, 0.1);       /* soft inner shade: the glass has thickness */
+    --glass-edge: 0 0 0 var(--hair) var(--rim);
+    --glass-drop: 0 1px 2px rgba(16, 19, 17, 0.04), 0 6px 14px -8px rgba(16, 19, 17, 0.16);
+    --ring-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  }
+  @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
+    :root { --hair: 0.5px; --rim: rgba(16, 19, 17, 0.14); --ring-rest: rgba(26, 128, 76, 0.34); --ring-rest-o: 1; }
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -107,22 +134,29 @@
     top: calc(12px + env(safe-area-inset-top, 0px));
     right: max(14px, env(safe-area-inset-right, 0px));
     z-index: 5;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 500;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
     color: var(--ink-3);
-    background: rgba(255, 255, 255, 0.86);
-    padding: 5px 10px;
+    padding: 6px 11px;
     border-radius: 999px;
-    box-shadow: inset 0 0 0 1px var(--line);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
     pointer-events: none;
     transition: opacity 0.3s ease;
   }
   .has-flow .tag { opacity: 0; }
+  /* top edge: what scrolls up under it goes soft, then pale */
   .app::before {
     content: ""; position: absolute; top: 0; left: 0; right: 0;
-    height: calc(22px + env(safe-area-inset-top, 0px));
-    background: linear-gradient(to bottom, var(--page) 30%, rgba(255, 255, 255, 0));
+    height: calc(36px + env(safe-area-inset-top, 0px));
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.62) 50%, rgba(255, 255, 255, 0) 100%);
+    -webkit-backdrop-filter: blur(6px);
+            backdrop-filter: blur(6px);
+    -webkit-mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 40%, transparent 100%);
     pointer-events: none;
     z-index: 3;
   }
@@ -135,11 +169,11 @@
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    scroll-padding-bottom: calc(var(--dock-h, 150px) + 16px);
+    scroll-padding-bottom: calc(var(--dock-h, 134px) + 16px);
     padding:
       calc(12px + env(safe-area-inset-top, 0px))
       max(var(--gutter), env(safe-area-inset-right, 0px))
-      calc(var(--dock-h, 150px) + 8px)
+      calc(var(--dock-h, 134px) + 8px)
       max(var(--gutter), env(safe-area-inset-left, 0px));
     outline: none;
   }
@@ -151,20 +185,20 @@
 
   .hello { padding: clamp(40px, 11vh, 120px) 0 6px; }
   .hello__date {
-    font-size: 13px; font-weight: 500; letter-spacing: 0.02em;
-    color: var(--ink-3); margin-bottom: 14px;
+    font-size: 13px; font-weight: 500; letter-spacing: 0.01em;
+    color: var(--ink-3); margin-bottom: 12px;
   }
   .hello__title {
     font-family: var(--serif);
     font-weight: 400;
     font-size: clamp(32px, 7.4vw, 46px);
-    line-height: 1.08;
-    letter-spacing: -0.02em;
+    line-height: 1.1;
+    letter-spacing: -0.022em;
     text-wrap: balance;
   }
   .hello__title span { display: block; }
   .hello__sub { color: #8a908b; }
-  .hello__nudge { margin-top: clamp(22px, 4.5vh, 40px); }
+  .hello__nudge { margin-top: clamp(24px, 4.5vh, 40px); }
 
   /* ---------- conversation ---------- */
 
@@ -173,7 +207,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: 18px 0 26px;
+    padding: 16px 0 28px;
     scroll-margin-top: 44px;
   }
   .turn:last-child { min-height: var(--turn-min, 0px); }
@@ -181,10 +215,11 @@
   .ask {
     align-self: flex-end;
     max-width: 84%;
-    padding: 10px 15px;
-    border-radius: 20px 20px 6px 20px;
+    padding: 9px 15px;
+    border-radius: 20px 20px 7px 20px;
     background: var(--wash);
     font-size: 16px;
+    letter-spacing: -0.003em;
     overflow-wrap: anywhere;
     animation: rise 0.45s var(--ease) both;
   }
@@ -193,49 +228,51 @@
     font-family: var(--serif);
     font-size: clamp(19px, 4.9vw, 22px);
     line-height: 1.36;
-    letter-spacing: -0.01em;
-    margin: 18px 0 16px;
+    letter-spacing: -0.012em;
+    margin: 20px 0 16px;
     max-width: 30em;
     text-wrap: pretty;
   }
   .say .w { display: inline-block; animation: word 0.5s var(--ease) both; animation-delay: calc(var(--i) * 34ms); }
-  .say--after { margin: 18px 0 0; }
+  .say--after { margin: 20px 0 0; }
   .say { outline: none; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @keyframes word { from { opacity: 0; transform: translateY(5px); filter: blur(5px); } to { opacity: 1; transform: none; filter: blur(0); } }
 
-  /* ---------- cards ("modules") ---------- */
+  /* ---------- cards ("modules") ----------
+     Cards are not glass. They are crisp, light sheets with one fine rim, so the floating glass reads above them. */
 
   .mod {
     position: relative;
     width: min(100%, 440px);
-    padding: 18px;
-    border-radius: 26px;
+    padding: var(--pad);
+    border-radius: var(--r-card);
     background: #fff;
     box-shadow:
-      inset 0 0 0 1px var(--line),
-      0 1px 2px rgba(16, 19, 17, 0.04),
-      0 18px 40px -18px rgba(16, 19, 17, 0.18);
+      0 0 0 var(--hair) var(--rim),
+      0 1px 2px rgba(16, 19, 17, 0.03),
+      0 18px 36px -24px rgba(16, 19, 17, 0.2);
     transform-origin: 85% 100%;                /* cards grow out of the avatar's corner */
     animation: mod-in 0.55s var(--ease) both;
     transition: box-shadow 0.5s ease, background 0.5s ease;
   }
   /* "fog": only the newest answer is at full strength */
-  .mod.is-past { background: #fbfbfa; box-shadow: inset 0 0 0 1px var(--line); }
+  .mod.is-past { background: #fcfcfb; box-shadow: 0 0 0 var(--hair) var(--rim); }
   @keyframes mod-in {
     from { opacity: 0; transform: translateY(16px) scale(0.97); filter: blur(6px); }
     to   { opacity: 1; transform: none; filter: blur(0); }
   }
 
-  .mod__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; min-height: 24px; }
-  .mod__kind { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; letter-spacing: 0.01em; color: var(--ink-2); }
-  .mod__kind svg { width: 17px; height: 17px; flex: none; }
-  .mod__actions { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+  .mod__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; min-height: 24px; }
+  .mod__kind { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; letter-spacing: 0.01em; color: var(--ink-2); }
+  .mod__kind svg { width: 16px; height: 16px; flex: none; stroke-width: 1.6; }
+  .mod__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+  .mod__actions .btn + .btn--text { margin-top: -4px; }     /* a text button carries its own air */
   .mod__actions:empty { display: none; }
 
   .pill {
-    font-size: 12px; font-weight: 600; line-height: 1;
+    font-size: 12px; font-weight: 600; line-height: 1; letter-spacing: 0.01em;
     padding: 6px 10px; border-radius: 999px;
     background: var(--wash); color: var(--ink-2);
     white-space: nowrap;
@@ -245,7 +282,7 @@
 
   /* a card is first "composed": soft bars shimmer, then the real parts arrive one by one */
   .mod__ghost {
-    position: absolute; inset: 18px;
+    position: absolute; inset: var(--pad);
     display: grid; align-content: start; gap: 12px;
     pointer-events: none;
     transition: opacity 0.25s ease;
@@ -260,7 +297,7 @@
   .mod__ghost i:nth-child(2) { width: 78%; height: 40px; border-radius: 14px; margin-top: 6px; }
   .mod__ghost i:nth-child(3) { width: 92%; }
   .mod__ghost i:nth-child(4) { width: 64%; }
-  .mod__ghost i:nth-child(5) { width: 100%; height: 46px; border-radius: 16px; margin-top: 8px; }
+  .mod__ghost i:nth-child(5) { width: 100%; height: 46px; border-radius: 999px; margin-top: 8px; }
   @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -100% 0; } }
 
   .mod.is-composing > :not(.mod__ghost) { visibility: hidden; }
@@ -268,118 +305,172 @@
   .mod.is-built .part { animation: part-in 0.5s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
   @keyframes part-in { from { opacity: 0; transform: translateY(8px); filter: blur(4px); } to { opacity: 1; transform: none; filter: blur(0); } }
 
-  .mod.is-muted { box-shadow: inset 0 0 0 1px var(--line); }
+  .mod.is-muted { box-shadow: 0 0 0 var(--hair) var(--rim); }
   .mod.is-muted .opts, .mod.is-muted .inline-input { opacity: 0.55; }     /* only the switched off controls fade, the words stay readable */
   .mod.is-muted .done__check { background: var(--wash); color: var(--ink-2); }
 
-  /* rows inside a card */
+  /* rows inside a card: no rules between them, the label column and even spacing do the work */
   .row {
     display: grid;
-    grid-template-columns: 70px minmax(0, 1fr);
+    grid-template-columns: 78px minmax(0, 1fr);
     gap: 4px 12px;
-    align-items: center;
-    padding: 11px 0;
-    border-top: 1px solid var(--line);
+    align-items: baseline;
+    padding: 8px 0;
   }
-  .row__label { font-size: 13px; color: var(--ink-3); }
+  .row:has(.opts), .row:has(.inline-input) { align-items: center; }
+  .row__label { font-size: 13px; letter-spacing: 0.005em; color: var(--ink-3); }
   .row__val { min-width: 0; font-size: 15.5px; overflow-wrap: anywhere; }
-  .row__val b { font-weight: 600; }
-  .note { display: block; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+  .row__val b { font-weight: 500; }
+  .note { display: block; font-size: 13px; line-height: 1.4; color: var(--ink-2); margin-top: 2px; }
   /* a row that was just changed by typing glows green for a moment */
   .mod.is-built .row.flash { animation: part-in 0.5s var(--ease) both, flash 1.1s ease; }
   @keyframes flash {
     0%, 35% { background: var(--green-wash); box-shadow: 0 0 0 6px var(--green-wash); border-radius: 10px; }
     100% { background: transparent; box-shadow: 0 0 0 6px transparent; border-radius: 10px; }
   }
-  .money { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-  .ok { color: var(--green-ink); font-style: normal; font-weight: 600; }
-  .fine { font-size: 12.5px; line-height: 1.45; color: var(--ink-3); margin-top: 12px; }
+  .row__val b.money, .money { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; }
+  .ok { color: var(--green-ink); font-style: normal; font-weight: 500; }
+  .fine { font-size: 13px; line-height: 1.45; color: var(--ink-3); margin-top: 10px; }
 
-  .who { display: flex; align-items: center; gap: 12px; padding: 2px 0 14px; }
+  .who { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
   .who__pic {
-    flex: none; width: 46px; height: 46px; border-radius: 50%;
+    flex: none; width: 44px; height: 44px; border-radius: 50%;
     display: grid; place-items: center;
     background: var(--wash); color: var(--ink-2);
     font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
   }
-  .who__txt { min-width: 0; display: grid; }
-  .who__txt b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .who__txt { min-width: 0; display: grid; gap: 1px; }
+  .who__txt b { font-size: 17px; font-weight: 600; letter-spacing: -0.012em; }
   .who__txt span { font-size: 14px; color: var(--ink-2); }
 
   .inline-input {
     width: 100%; height: 40px;
-    padding: 0 12px;
-    border: 0; border-radius: 12px;
+    padding: 0 14px;
+    border: 0; border-radius: 999px;
     background: var(--wash);
     font-size: 16px;
     outline: none;
     transition: box-shadow 0.2s ease, background 0.2s ease;
   }
-  .inline-input:focus { background: #fff; box-shadow: inset 0 0 0 2px var(--green); }
+  .inline-input:focus { background: #fff; box-shadow: inset 0 0 0 1.5px var(--green); }
 
   /* choice chips (real radio inputs underneath) */
   .opts { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
   .opt { position: relative; display: block; }
-  .opt input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  /* the shape is slim, the tap area is still 44px tall */
+  .opt input { position: absolute; opacity: 0; left: 0; top: -3px; width: 100%; height: calc(100% + 6px); margin: 0; cursor: pointer; }
   .opt span {
     display: grid; place-items: center;
-    min-height: 44px; padding: 0 14px;
+    min-height: 38px; padding: 0 14px;
     border-radius: 999px;
     background: var(--wash);
-    font-size: 15px; font-weight: 500;
+    font-size: 15px; font-weight: 500; letter-spacing: -0.003em;
     white-space: nowrap;
     transition: background 0.18s ease, color 0.18s ease, transform 0.18s var(--ease);
   }
   .opt input:checked + span { background: var(--ink); color: #fff; }
   .opt input:focus-visible + span { outline: 2px solid var(--green); outline-offset: 2px; }
-  .opt:active span { transform: scale(0.95); }
+  .opt:active span { transform: scale(0.96); }
   .opts--days { flex-wrap: nowrap; }
-  .opts--days .opt { flex: 1 1 0; min-width: 44px; max-width: 64px; }
-  .opts--days span { height: 58px; padding: 0; border-radius: 16px; line-height: 1.1; align-content: center; gap: 2px; }
-  .opts--days small { font-size: 11.5px; font-weight: 500; opacity: 0.7; }
-  .opts--days b { font-size: 17px; font-weight: 600; }
-  .opts--seg { flex-wrap: nowrap; padding: 3px; border-radius: 999px; background: var(--wash); gap: 0; width: fit-content; max-width: 100%; }
-  .opts--seg span { background: transparent; min-height: 38px; }
+  .opts--days .opt { flex: 1 1 0; min-width: 44px; max-width: 62px; }
+  .opts--days .opt input, .opts--list .opt input { top: 0; height: 100%; }
+  .opts--days span { height: 54px; padding: 0; border-radius: 16px; line-height: 1.1; align-content: center; gap: 2px; }
+  .opts--days small { font-size: 12px; font-weight: 500; opacity: 0.72; }
+  .opts--days b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+
+  /* the two way switch: a recessed track with a smoked glass lens that slides to the chosen side */
+  .opts--seg {
+    position: relative;
+    display: inline-grid; grid-template-columns: 1fr 1fr;
+    padding: 3px; gap: 0;
+    border-radius: 999px;
+    background: var(--wash);
+    box-shadow: inset 0 0 0 var(--hair) rgba(16, 19, 17, 0.05), inset 0 1px 2px rgba(16, 19, 17, 0.05);
+    width: fit-content; max-width: 100%;
+  }
+  .opts--seg .opt { z-index: 1; }
+  .opts--seg .opt input { top: -4px; height: calc(100% + 8px); }
+  .opts--seg span { background: transparent; min-height: 36px; padding: 0 18px; transition: color 0.25s ease, transform 0.18s var(--ease); }
   .opts--seg input:checked + span { background: var(--ink); color: #fff; }
+  @supports selector(:has(*)) {
+    .opts--seg::before {
+      content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px;
+      width: calc(50% - 3px);
+      border-radius: 999px;
+      background: linear-gradient(180deg, #2c312e 0%, #171a18 52%, #101311 100%);
+      box-shadow:
+        inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.2),
+        inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.36),
+        inset -0.5px -0.75px 0.5px rgba(255, 255, 255, 0.12),
+        0 1px 1.5px rgba(16, 19, 17, 0.22),
+        0 4px 8px -4px rgba(16, 19, 17, 0.3);
+      transition: transform 0.46s var(--spring), scale 0.3s var(--ease);
+    }
+    .opts--seg:has(.opt:last-child input:checked)::before { transform: translateX(100%); }
+    .opts--seg:active::before { scale: 1.03 1.07; }
+    /* the lens carries the fill, so the chosen side keeps its dark color but only paints it under its own letters */
+    .opts--seg input:checked + span { -webkit-background-clip: text; background-clip: text; }
+    .opts--seg .opt:active span { transform: none; }
+  }
 
   .btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    min-height: 50px; padding: 0 18px;
-    border-radius: 16px;
-    font-size: 16px; font-weight: 600;
+    min-height: 48px; padding: 8px 20px;
+    border-radius: 24px;
+    font-size: 16px; font-weight: 600; letter-spacing: -0.005em;
     text-align: center;
-    transition: transform 0.18s var(--ease), background 0.18s ease, opacity 0.18s ease;
+    transition: transform 0.18s var(--ease), background 0.18s ease, opacity 0.18s ease, filter 0.18s ease;
   }
   a.btn { text-decoration: none; }
   .btn:active { transform: scale(0.97); }
-  .btn--primary { background: var(--green); color: #fff; }
+  /* the primary action is tinted glass: green all the way through, a bright rim on top, its own soft green shadow */
+  .btn--primary {
+    background: linear-gradient(180deg, #0f8243 0%, #0e7a3e 50%, #0c7039 100%);
+    color: #fff;
+    box-shadow:
+      inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.24),
+      inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.46),
+      inset -0.5px -0.75px 0.5px rgba(255, 255, 255, 0.16),
+      inset 0 -9px 12px -9px rgba(3, 52, 24, 0.42),
+      0 1px 2px rgba(11, 107, 53, 0.22),
+      0 12px 22px -14px rgba(14, 122, 62, 0.62);
+  }
   .btn--quiet { background: var(--wash); color: var(--ink); }
   .btn--text { min-height: 44px; color: var(--ink-2); font-weight: 500; }
-  .btn--danger { background: var(--red-ink); color: #fff; }
+  .btn--danger {
+    background: linear-gradient(180deg, #bb2c23 0%, #b3261e 50%, #a8221b 100%);
+    color: #fff;
+    box-shadow:
+      inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.22),
+      inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.4),
+      inset 0 -9px 12px -9px rgba(90, 10, 6, 0.5),
+      0 1px 2px rgba(179, 38, 30, 0.22),
+      0 12px 22px -14px rgba(179, 38, 30, 0.6);
+  }
   @media (hover: hover) {
-    .btn--primary:hover { background: #0c6c37; }
+    .btn--primary:hover, .btn--danger:hover { filter: brightness(0.94); }
     .btn--quiet:hover { background: var(--wash-2); }
     .btn--text:hover { color: var(--ink); }
   }
 
   /* booked / done state */
-  .done { display: flex; align-items: center; gap: 12px; padding: 4px 0 14px; outline: none; }
+  .done { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; outline: none; }
   .mod__kind { outline: none; }
   .done__check {
-    flex: none; width: 46px; height: 46px; border-radius: 50%;
+    flex: none; width: 44px; height: 44px; border-radius: 50%;
     display: grid; place-items: center;
     background: var(--green-wash); color: var(--green-ink);
   }
-  .done__check svg { width: 24px; height: 24px; }
+  .done__check svg { width: 22px; height: 22px; }
   .done__check path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw 0.5s 0.15s var(--ease) forwards; }
   @keyframes draw { to { stroke-dashoffset: 0; } }
-  .done b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .done b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.014em; }
   .done span { font-size: 14.5px; color: var(--ink-2); }
 
   /* row of cards you can swipe (find care) */
   .strip {
     align-self: stretch;
-    display: flex; gap: 12px;
+    display: flex; gap: 10px;
     overflow-x: auto;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
@@ -388,33 +479,36 @@
     scroll-padding-left: var(--gutter);
   }
   .strip::-webkit-scrollbar { display: none; }
-  .strip .mod { flex: none; width: min(76vw, 264px); scroll-snap-align: start; padding: 16px; }
+  .strip .mod { flex: none; width: min(76vw, 264px); scroll-snap-align: start; padding: 16px; border-radius: 26px; }
   .strip .mod__head { justify-content: flex-start; }
+  .strip .who { padding-bottom: 10px; }
+  .strip .btn { min-height: 44px; }
   .strip + .say--after { margin-top: -6px; }
   @media (min-width: 700px) {
     .strip { overflow: visible; }
     .strip .mod { flex: 1 1 0; width: auto; min-width: 0; }
   }
-  .mini { display: grid; gap: 3px; font-size: 14px; color: var(--ink-2); padding: 0 0 4px; }
-  .mini b { color: var(--ink); font-weight: 600; }
+  .mini { display: grid; gap: 3px; font-size: 14px; color: var(--ink-2); padding: 0 0 2px; }
+  .mini b { color: var(--ink); font-weight: 500; }
 
   /* coverage */
-  .verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 2px 0 14px; }
-  .verdict b { font-family: var(--serif); font-size: 28px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.1; }
-  .meter { height: 8px; border-radius: 999px; background: var(--wash-2); overflow: hidden; margin-top: 8px; }
+  .verdict { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 0 0 10px; }
+  .verdict b { font-family: var(--serif); font-size: 28px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.12; }
+  .meter { height: 6px; border-radius: 999px; background: var(--wash-2); overflow: hidden; margin-top: 10px; }
   .meter i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--green-mid), var(--green-lo)); transition: width 1.1s var(--ease) 0.25s; }
 
   /* usage */
-  .gauge { padding: 12px 0; border-top: 1px solid var(--line); }
+  .gauge { padding: 4px 0 14px; }
+  .gauge + .gauge { padding-top: 10px; }
   .gauge__top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
   .gauge__top span { font-size: 13px; color: var(--ink-3); }
-  .gauge__top b { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-  .gauge__top em { font-style: normal; font-size: 14px; font-weight: 400; color: var(--ink-2); }
+  .gauge__top b { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; }
+  .gauge__top em { font-style: normal; font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--ink-2); }
 
   /* claim */
-  .steps { display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px 0 14px; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); padding: 4px 0 14px; }
   .step { position: relative; padding-top: 20px; font-size: 13px; color: var(--ink-3); }
-  .step b { display: block; font-size: 14px; font-weight: 600; color: var(--ink); }
+  .step b { display: block; font-size: 14px; font-weight: 500; color: var(--ink); }
   .step::before {
     content: ""; position: absolute; top: 2px; left: 0;
     width: 10px; height: 10px; border-radius: 50%;
@@ -429,35 +523,48 @@
   .step.is-next b { color: var(--ink-2); }
 
   /* cost estimate */
-  .keyfact { padding: 0 0 12px; }
-  .keyfact b { display: block; font-size: 34px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .keyfact { padding: 0 0 10px; }
+  .keyfact b { display: block; font-size: 34px; font-weight: 600; letter-spacing: -0.032em; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .keyfact span { font-size: 14.5px; color: var(--ink-2); }
   .opts--list { flex-direction: column; flex-wrap: nowrap; }
-  .opts--list span { display: flex; justify-content: space-between; gap: 12px; border-radius: 14px; padding: 0 14px; min-height: 48px; white-space: normal; text-align: left; }
+  .opts--list span { display: flex; justify-content: space-between; gap: 12px; border-radius: 16px; padding: 0 16px; min-height: 48px; white-space: normal; text-align: left; }
   .opts--list span b { font-weight: 500; }
-  .opts--list span em { font-style: normal; font-weight: 650; font-variant-numeric: tabular-nums; }
-  .math { border-top: 1px solid var(--line); }
-  .math summary { list-style: none; cursor: pointer; padding: 12px 0; font-size: 14.5px; font-weight: 600; color: var(--green-ink); display: flex; justify-content: space-between; align-items: center; }
+  .opts--list span em { font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; }
+  /* the voice card */
+  .row--full { grid-template-columns: minmax(0, 1fr); }      /* the label sits above a wide field */
+  .row--full .note { margin-top: 8px; min-height: 18px; }
+  .row--full [data-more] { justify-self: start; min-height: 44px; padding: 4px 2px; margin-top: 2px; font-size: 14.5px; color: var(--green-ink); }
+  .row[hidden], .btn[hidden], .fine[hidden] { display: none; }
+  .btn[aria-disabled="true"] { opacity: 0.55; }             /* waiting: it keeps focus, a second press does nothing */
+  .opt input:disabled + span { opacity: 0.45; }
+  .opt input:disabled { cursor: default; }
+  .fine.is-bad { color: var(--red-ink); }
+  .fine.is-good { color: var(--green-ink); }
+  .math { margin-top: 2px; }
+  .math summary { list-style: none; cursor: pointer; padding: 10px 0; min-height: 44px; font-size: 14.5px; font-weight: 600; color: var(--green-ink); display: flex; justify-content: space-between; align-items: center; }
   .math summary::-webkit-details-marker { display: none; }
-  .math summary::after { content: "+"; font-size: 20px; font-weight: 400; line-height: 1; }
+  .math summary::after { content: "+"; font-size: 20px; font-weight: 300; line-height: 1; }
   .math[open] summary::after { content: "\2212"; }
   .math .sum { border-top: 0; padding-top: 0; padding-bottom: 6px; font-size: 14.5px; }
   .math .sum div span:first-child { max-width: 70%; }
-  .sum { display: grid; gap: 7px; padding: 12px 0 2px; border-top: 1px solid var(--line); font-size: 15px; }
+  .sum { display: grid; gap: 8px; padding: 4px 0 2px; font-size: 15px; }
   .sum div { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
-  .sum .sum__total { color: var(--ink); font-weight: 650; font-size: 17px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .sum div span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  /* the one rule a sum needs: the line above the total */
+  .sum .sum__total { color: var(--ink); font-weight: 600; font-size: 17px; letter-spacing: -0.01em; margin-top: 2px; padding-top: 10px; border-top: 1px solid var(--line); }
 
   /* member ID card */
   .idcard {
     position: relative;
     aspect-ratio: 1.586;
-    border-radius: 18px;
+    border-radius: 20px;
     padding: 16px 18px;
     display: flex; flex-direction: column; justify-content: space-between;
     color: #fff;
     background:
       radial-gradient(90% 120% at 108% -10%, rgba(142, 240, 176, 0.95) 0%, rgba(58, 203, 120, 0.85) 22%, rgba(20, 150, 75, 0.55) 44%, rgba(18, 39, 30, 0) 72%),
       #121413;
+    box-shadow: inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.2), inset 0.75px 1px 0.5px rgba(255, 255, 255, 0.3), 0 10px 22px -16px rgba(16, 19, 17, 0.55);
     overflow: hidden;
   }
   .idcard__plan { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; opacity: 0.85; }
@@ -465,89 +572,114 @@
   .idcard__grid { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; font-size: 13px; }
   .idcard__grid span { opacity: 0.62; display: block; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
   .idcard__grid b { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-  .copays { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 12px; text-align: center; }
-  .copays div { padding: 9px 2px; border-radius: 14px; background: var(--wash); font-size: 11.5px; color: var(--ink-2); }
-  .copays b { display: block; font-size: 16px; font-weight: 650; color: var(--ink); }
+  .copays { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; text-align: center; }
+  .copays div { padding: 9px 2px; border-radius: 16px; background: var(--wash); font-size: 12px; color: var(--ink-2); }
+  .copays b { display: block; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
 
   /* today (home) */
-  .item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
-  .item:first-child { border-top: 0; padding-top: 2px; }
-  .item__dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--wash); color: var(--ink-2); }
-  .item__dot svg { width: 18px; height: 18px; }
+  .item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 0; text-align: left; }
+  .item:first-child { padding-top: 0; }
+  .item:last-child { padding-bottom: 0; }
+  .item__dot { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--wash); color: var(--ink-2); }
+  .item__dot svg { width: 18px; height: 18px; stroke-width: 1.6; }
   .item.is-done .item__dot { background: var(--green-wash); color: var(--green-ink); }
-  .item__txt { flex: 1 1 auto; min-width: 0; display: grid; }
-  .item__txt b { font-size: 15.5px; font-weight: 600; }
+  .item__txt { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+  .item__txt b { font-size: 15.5px; font-weight: 500; letter-spacing: -0.006em; }
   .item__txt span { font-size: 13.5px; color: var(--ink-2); }
-  .item em { flex: none; font-style: normal; font-size: 14px; font-weight: 600; padding: 8px 12px; border-radius: 999px; background: var(--wash); transition: background 0.18s ease; }
+  .item em { flex: none; font-style: normal; font-size: 14px; font-weight: 500; padding: 7px 13px; border-radius: 999px; background: var(--wash); transition: background 0.18s ease; }
   @media (hover: hover) { button.item:hover em { background: var(--wash-2); } }
 
   /* urgent */
-  .alert { display: block; text-decoration: none; padding: 14px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 12px; }
+  .alert { display: block; text-decoration: none; padding: 14px 16px; border-radius: 18px; background: var(--red-wash); color: var(--red-ink); font-weight: 600; font-size: 16px; margin-bottom: 8px; }
   a.choice { text-decoration: none; color: inherit; }
   .alert span { display: block; font-weight: 400; font-size: 14px; margin-top: 2px; }
-  .choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--line); text-align: left; }
-  .choice b { display: block; font-weight: 600; font-size: 15.5px; }
+  .choice { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 0; text-align: left; }
+  .choice b { display: block; font-weight: 500; font-size: 15.5px; letter-spacing: -0.006em; }
   .choice span { font-size: 13.5px; color: var(--ink-2); }
-  .choice em { font-style: normal; font-weight: 600; font-size: 15px; white-space: nowrap; }
+  .choice em { font-style: normal; font-weight: 600; font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-  /* ---------- dock: suggestions + chat bar ---------- */
+  /* ---------- dock: suggestions + chat bar (the floating glass layer) ---------- */
 
   .dock {
     position: absolute; left: 0; right: 0; bottom: 0;
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 0;
     padding:
-      18px
+      12px
       max(12px, env(safe-area-inset-right, 0px))
-      max(14px, env(safe-area-inset-bottom, 0px))
+      max(12px, env(safe-area-inset-bottom, 0px))
       max(12px, env(safe-area-inset-left, 0px));
     z-index: 4;
     pointer-events: none;                      /* taps fall through the empty parts */
   }
   .dock > * { pointer-events: auto; }
-  /* frosted veil: whatever scrolls under the dock goes soft and pale */
-  .dock::before {
-    content: ""; position: absolute; inset: 0;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0, rgba(255, 255, 255, 0.62) 46px, rgba(255, 255, 255, 0.8) 100%);
-    -webkit-backdrop-filter: blur(10px);
-            backdrop-filter: blur(10px);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
-            mask-image: linear-gradient(to bottom, transparent 0, #000 44px);
+  /* scroll edge: whatever slides under the dock first goes a little soft, then frosts over and turns pale */
+  .dock::before, .dock::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0;
     pointer-events: none;
     z-index: -1;
   }
-  .kb-open .dock { padding-bottom: 10px; }
+  /* two steps, one after the other: the second, stronger blur only ramps up over content the first has already
+     softened. That keeps the "sharp text with a ghost around it" look of a single masked blur away. */
+  .dock::before {
+    top: -12px;
+    -webkit-backdrop-filter: blur(3px);
+            backdrop-filter: blur(3px);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
+  }
+  .dock::after {
+    top: 2px;
+    background:
+      /* a breath of mint around the avatar's end of the bar: the only tint on the page, there for the glass to catch */
+      radial-gradient(112px 56px at calc(50% + min(50% - 12px, 320px) - 36px) calc(100% - 24px), rgba(58, 203, 120, 0.2) 0%, rgba(58, 203, 120, 0.07) 52%, rgba(58, 203, 120, 0) 100%),
+      /* pale behind the chips and the bar, nearly white in the strip under the bar so nothing peeks out below it */
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 0, rgba(255, 255, 255, 0.5) 36px, rgba(255, 255, 255, 0.66) calc(100% - 26px), rgba(255, 255, 255, 0.93) 100%);
+    -webkit-backdrop-filter: blur(12px) saturate(1.5);
+            backdrop-filter: blur(12px) saturate(1.5);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 30px);
+  }
+  .kb-open .dock { padding-bottom: 8px; }
 
   .chips {
-    display: flex; gap: 8px;
+    display: flex; gap: 7px;
     width: min(100%, 640px);
-    min-height: 42px;
+    min-height: 52px;
     overflow-x: auto;
     scrollbar-width: none;
-    padding: 2px 2px 0;
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
-            mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    padding: 6px 2px 10px;                     /* room for each chip's 44px tap area and its shadow */
   }
   .chips::-webkit-scrollbar { display: none; }
+  /* wide screens: the row is as wide as the bar and melts away on the right where more chips wait.
+     (A mask on the row switches off backdrop blur inside it in some browsers, so there the chips lean on the
+     frosted veil behind them. Phones do not use the mask, see "sizes" below.) */
+  @media (min-width: 665px) {
+    .chips {
+      width: min(100% + 4px, 644px);           /* 2px of room each side for the rims, so the first chip lines up with the bar */
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+              mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+    }
+  }
   .chip {
+    position: relative;
     flex: none;
-    min-height: 40px; padding: 0 15px;
+    height: 36px; padding: 0 14px;
     border-radius: 999px;
-    box-shadow: inset 0 0 0 1px var(--line), inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 12px -6px rgba(16, 19, 17, 0.12);
-    background: rgba(255, 255, 255, 0.72);
-    -webkit-backdrop-filter: blur(16px) saturate(1.6);
-            backdrop-filter: blur(16px) saturate(1.6);
-    font-size: 14.5px; font-weight: 500; color: var(--ink);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
+    font-size: 14.5px; font-weight: 500; letter-spacing: -0.004em; color: var(--ink);
     white-space: nowrap;
     animation: rise 0.4s var(--ease) both;
     animation-delay: calc(var(--i, 0) * 40ms);
     transition: background 0.18s ease, transform 0.18s var(--ease);
   }
-  .chip:last-child { margin-right: 24px; }
+  .chip::after { content: ""; position: absolute; inset: -4px 0; }          /* 44px tall tap area */
+  .chip:last-child { margin-right: 32px; }
   .chip:focus-visible { outline-offset: -2px; }
-  .chip:active { transform: scale(0.95); }
-  @media (hover: hover) { .chip:hover { background: rgba(244, 245, 242, 0.92); } }
-  @media (pointer: coarse) { .chip { min-height: 44px; } .chips { min-height: 46px; } }
-  @media (pointer: coarse) { .opts--seg span { min-height: 42px; } }
+  .chip:active { transform: scale(0.96); }
+  @media (hover: hover) { .chip:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 251, 249, 0.82) 100%); } }
 
   .bar {
     position: relative;
@@ -556,84 +688,267 @@
     align-items: center;
     width: min(100%, 640px);
     height: var(--h);
-    border-radius: calc(var(--h) * 0.34);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.66) 100%);
-    -webkit-backdrop-filter: blur(26px) saturate(1.8);
-            backdrop-filter: blur(26px) saturate(1.8);
+    border-radius: calc(var(--h) / 2);         /* a true capsule. The round end and the avatar share a center */
+    /* the glass is a touch cooler than the page, so its white rim has something to shine against */
+    background: linear-gradient(180deg, rgba(252, 253, 252, 0.84) 0%, rgba(242, 245, 243, 0.64) 100%);
+    -webkit-backdrop-filter: blur(22px) saturate(1.9) brightness(1.03);
+            backdrop-filter: blur(22px) saturate(1.9) brightness(1.03);
     box-shadow:
-      0 20px 44px -20px rgba(16, 19, 17, 0.3),
-      0 3px 10px rgba(16, 19, 17, 0.07),
-      14px 14px 34px -16px rgba(40, 190, 110, 0.5);       /* a little green light under the avatar */
+      0 1px 2px rgba(16, 19, 17, 0.05),
+      0 8px 20px -10px rgba(16, 19, 17, 0.16),
+      0 26px 48px -30px rgba(16, 19, 17, 0.3);
     color: var(--ink);
-    transition: box-shadow 0.25s ease;
   }
-  /* glass edge: hairline outside, bright rim inside */
-  .bar::after {
+
+  /* --- the gradient border ---
+     1. at rest: a fine gradient hairline, mint where the light lands, emerald where the avatar lives */
+  .bar::before {
     content: ""; position: absolute; inset: 0;
     border-radius: inherit;
+    padding: var(--hair);
+    background: linear-gradient(98deg,
+      rgba(110, 226, 156, 0.85) 0%,
+      rgba(58, 203, 120, 0.55) 14%,
+      var(--ring-rest) 36%,
+      var(--ring-rest) 58%,
+      rgba(47, 191, 113, 0.7) 82%,
+      rgba(14, 122, 62, 0.9) 100%);
+    opacity: var(--ring-rest-o);
+    -webkit-mask: var(--ring-mask);
+    -webkit-mask-composite: xor;
+            mask: var(--ring-mask);
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 4;
+  }
+  /* glass body: bright rim just inside the hairline, a top light and a soft shade underneath */
+  .bar::after {
+    content: ""; position: absolute; inset: var(--hair);
+    border-radius: inherit;
     box-shadow:
-      inset 0 0 0 1px rgba(16, 19, 17, 0.08),
-      inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.55),
-      inset 0 0 18px rgba(255, 255, 255, 0.55);
+      inset 0 0 0 1px rgba(255, 255, 255, 0.6),
+      inset 1.5px 2px 1px -1px #fff,
+      inset -1px -1.5px 1px -1px rgba(255, 255, 255, 0.7),
+      inset 0 12px 14px -14px rgba(255, 255, 255, 0.95),
+      inset 0 -11px 14px -13px rgba(16, 19, 17, 0.16);
+    background:
+      radial-gradient(calc(var(--h) * 2.4) calc(var(--h) * 0.9) at var(--mx, 24%) 0%, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0) 70%),
+      radial-gradient(calc(var(--h) * 3.4) 130% at 100% 60%, rgba(58, 203, 120, 0.13) 0%, rgba(58, 203, 120, 0.04) 55%, rgba(58, 203, 120, 0) 100%);
     pointer-events: none;
     z-index: 3;
+  }
+  /* 2. awake (focus, or the assistant is thinking): a slim ring whose greens travel around the capsule */
+  .bar__ring {
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    overflow: hidden;
+    -webkit-mask: var(--ring-mask);
+    -webkit-mask-composite: xor;
+            mask: var(--ring-mask);
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.45s ease;
+    pointer-events: none;
+    z-index: 4;
+  }
+  .bar__ring i {
+    position: absolute; left: 50%; top: 50%;
+    width: 150%; height: 0; padding-bottom: 150%;        /* a square, 1.5 bars wide */
+    /* two lights a half turn apart: the strong one starts top left, the faint one bottom right */
+    background: conic-gradient(from 0deg,
+      #1fa65c 0deg, #0e7a3e 46deg, #14964b 96deg, #2fbf71 132deg,
+      #86eeae 151deg, #2fbf71 170deg, #14964b 212deg, #0e7a3e 250deg,
+      #23b066 290deg, #6fe39d 314deg, #b9f6d0 330deg, #6fe39d 346deg, #1fa65c 360deg);
+    /* squash the wheel to the bar's proportions so the colors spread evenly along the long edges */
+    transform: translate(-50%, -50%) scaleY(var(--ring-k, 0.17)) rotate(0turn);
+  }
+  @keyframes ring-flow { to { transform: translate(-50%, -50%) scaleY(var(--ring-k, 0.17)) rotate(1turn); } }
+  /* 3. a soft matching glow that sits on the edge of the glass */
+  .bar__glow {
+    position: absolute; inset: -3px;
+    border-radius: calc(var(--h) / 2 + 3px);
+    filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .bar__glow::before {
+    content: ""; position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 6px;
+    background: linear-gradient(98deg, #86eeae 0%, #46d184 30%, #25b267 62%, #14964b 100%);
+    -webkit-mask: var(--ring-mask);
+    -webkit-mask-composite: xor;
+            mask: var(--ring-mask);
+            mask-composite: exclude;
+  }
+  .bar:focus-within .bar__ring, .bar.is-thinking .bar__ring { opacity: 1; }
+  /* "is-lit" lingers a moment after focus or thinking ends, so the greens keep travelling while the ring fades out.
+     While the assistant thinks, a line of script speeds the same animation up (no restart, no jump). */
+  .bar:focus-within .bar__ring i, .bar.is-thinking .bar__ring i, .bar.is-lit .bar__ring i { animation: ring-flow 9s linear infinite; }
+  .bar:focus-within .bar__glow { opacity: 0.44; }
+  .bar.is-thinking .bar__glow { opacity: 0.68; }
+
+  /* without mask-composite there is no gradient ring: fall back to a plain hairline and a soft green focus ring */
+  @supports not ((-webkit-mask-composite: xor) or (mask-composite: exclude)) {
+    .bar::before, .bar__ring, .bar__glow { display: none; }
+    .bar { box-shadow: 0 0 0 1px var(--rim), 0 8px 20px -10px rgba(16, 19, 17, 0.16), 0 26px 48px -30px rgba(16, 19, 17, 0.3); }
+    .bar:focus-within, .bar.is-thinking { box-shadow: 0 0 0 2px rgba(20, 150, 75, 0.6), 0 0 0 5px rgba(58, 203, 120, 0.16), 0 8px 20px -10px rgba(16, 19, 17, 0.16), 0 26px 48px -30px rgba(16, 19, 17, 0.3); }
   }
 
   .icon-btn {
     flex: none;
     display: grid; place-items: center;
-    width: 48px; height: 48px;
-    margin-left: calc(var(--h) * 0.14);
-    border-radius: 14px;
+    width: 44px; height: 44px;
+    margin-left: calc((var(--h) - 44px) / 2);  /* concentric with the capsule's round end */
+    border-radius: 50%;
     color: var(--ink);
     z-index: 2;
+    /* a round lens of frosted glass: bright rim top left, a little shade underneath */
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(238, 242, 239, 0.6) 100%);
+    box-shadow:
+      inset 1px 1.5px 0.5px rgba(255, 255, 255, 0.98),
+      inset -1px -1px 0.5px rgba(255, 255, 255, 0.6),
+      inset 0 -6px 8px -7px rgba(16, 19, 17, 0.16),
+      0 0 0 var(--hair) rgba(16, 19, 17, 0.08),
+      0 2px 5px -2px rgba(16, 19, 17, 0.14);
     transition: background 0.2s ease, transform 0.2s var(--ease);
   }
-  .icon-btn svg { width: 24px; height: 24px; display: block; }
-  @media (hover: hover) { .icon-btn:hover { background: rgba(16, 19, 17, 0.06); } }
+  .icon-btn svg { width: 21px; height: 21px; display: block; }
+  @media (hover: hover) { .icon-btn:hover { background: linear-gradient(145deg, #ffffff 0%, rgba(228, 233, 230, 0.75) 100%); } }
   .icon-btn:active { transform: scale(0.9); }
   .bar button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
-  .bar:focus-within {
-    box-shadow:
-      0 20px 44px -20px rgba(16, 19, 17, 0.3),
-      0 3px 10px rgba(16, 19, 17, 0.07),
-      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
-      0 0 0 4px rgba(58, 203, 120, 0.2);
-  }
 
   .field {
     flex: 1 1 auto; min-width: 0; height: 100%;
     display: flex; align-items: center;
-    padding-left: 8px;
+    padding-left: 12px;
     padding-right: calc(var(--h) * 1.32);
     z-index: 2;
   }
   .field input {
     flex: 1 1 auto; min-width: 0; width: 100%; height: 44px;
     border: 0; outline: 0; background: transparent;
-    font-size: 16px; letter-spacing: 0.005em;
+    font-size: 16px; letter-spacing: -0.003em;
     color: var(--ink);
     caret-color: var(--green);
     text-overflow: ellipsis;
     -webkit-appearance: none; appearance: none;
   }
-  .field input::placeholder { color: rgba(16, 19, 17, 0.62); opacity: 1; }
+  .field input::placeholder { color: rgba(16, 19, 17, 0.64); opacity: 1; }
+  .bar.is-listening .field input { text-overflow: clip; }      /* heard words scroll, so the newest ones stay in view */
 
   .send {
     flex: none; position: relative;
     display: grid; place-items: center;
-    width: 36px; height: 36px; margin-left: 6px;
+    width: 34px; height: 34px; margin-left: 6px;
     border-radius: 50%;
-    background: var(--ink); color: #fff;
+    background: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
+    box-shadow: inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.22), inset 0.75px 1px 0.5px rgba(214, 255, 230, 0.6), 0 5px 10px -5px rgba(14, 122, 62, 0.75);
+    color: #fff;
     opacity: 0; transform: scale(0.6); pointer-events: none;
     transition: opacity 0.2s ease, transform 0.35s var(--ease), background 0.2s ease;
   }
   .send::before { content: ""; position: absolute; inset: -5px; }
-  .send svg { width: 18px; height: 18px; display: block; }
+  .send svg { width: 17px; height: 17px; display: block; }
   .has-text .send { opacity: 1; transform: none; pointer-events: auto; }
   .has-text .send:active { transform: scale(0.9); }
   .bar:not(.has-text) .send { width: 0; margin-left: 0; }          /* no empty slot while there is nothing to send */
+
+  /* ---------- voice ---------- */
+  /* the microphone sits where send goes: mic while the box is empty, send once there are words */
+  .mic {
+    flex: none; position: relative;
+    display: grid; place-items: center;
+    width: 36px; height: 36px; margin-left: 6px;
+    border-radius: 50%;
+    color: var(--ink);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(238, 242, 239, 0.6) 100%);
+    box-shadow:
+      inset 1px 1.5px 0.5px rgba(255, 255, 255, 0.98),
+      inset -1px -1px 0.5px rgba(255, 255, 255, 0.6),
+      inset 0 -6px 8px -7px rgba(16, 19, 17, 0.16),
+      0 0 0 var(--hair) rgba(16, 19, 17, 0.08),
+      0 2px 5px -2px rgba(16, 19, 17, 0.14);
+    transition: opacity 0.2s ease, transform 0.35s var(--ease), width 0.2s ease, margin 0.2s ease, color 0.2s ease;
+  }
+  .mic::before { content: ""; position: absolute; inset: -5px; }            /* 46px tap area */
+  .mic svg { width: 19px; height: 19px; display: block; position: relative; }
+  .mic .stop { display: none; }
+  .mic:active { transform: scale(0.9); }
+  .bar.has-text:not(.is-listening) .mic { width: 0; margin-left: 0; opacity: 0; transform: scale(0.6); pointer-events: none; }
+  .bar.is-listening .send { width: 0; margin-left: 0; opacity: 0; pointer-events: none; }
+  /* listening: the mic turns to green glass and rings go out from it */
+  .bar.is-listening .mic {
+    color: #fff;
+    background: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
+    box-shadow: inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.22), inset 0.75px 1px 0.5px rgba(214, 255, 230, 0.6), 0 5px 10px -5px rgba(14, 122, 62, 0.75);
+  }
+  .mic::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; pointer-events: none; opacity: 0; }
+  .bar.is-listening .mic::after { box-shadow: 0 0 0 2px rgba(58, 203, 120, 0.55); animation: mic-ring 1.5s ease-out infinite; }
+  .bar.is-hearing .mic::after { animation-duration: 0.75s; }
+  /* it asked something out loud and is waiting for a tap on the mic */
+  .bar.wants-answer:not(.is-listening) .mic::after { box-shadow: 0 0 0 2px var(--green); animation: mic-ring 2.4s ease-out infinite; }
+  /* while it talks, the mic is a stop button */
+  .bar.is-speaking:not(.is-listening) .mic .wave { display: none; }
+  .bar.is-speaking:not(.is-listening) .mic .stop { display: block; }
+  @keyframes mic-ring { from { transform: scale(0.92); opacity: 0.9; } to { transform: scale(1.55); opacity: 0; } }
+
+  /* the gradient ring is awake while it listens and while it talks */
+  .bar.is-listening .bar__ring, .bar.is-speaking .bar__ring { opacity: 1; }
+  .bar.is-listening .bar__ring i, .bar.is-speaking .bar__ring i { animation: ring-flow 9s linear infinite; }
+  .bar.is-listening .bar__glow { opacity: 0.7; animation: listen-breathe 1.7s ease-in-out infinite; }
+  .bar.is-speaking .bar__glow { opacity: 0.5; }
+  @keyframes listen-breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.85; } }
+
+  /* questions that were spoken carry a small microphone mark */
+  .ask--voice {
+    padding-left: 36px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='3.5' width='6' height='10.5' rx='3'/%3E%3Cpath d='M5.8 11.5a6.2 6.2 0 0 0 12.4 0M12 17.7v2.8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 13px 50%;
+    background-size: 15px 15px;
+  }
+
+  /* short notes about voice (what it needs, what went wrong) appear just above the suggestions */
+  .toast {
+    max-width: min(100%, 560px);
+    margin: 0 4px 2px;
+    padding: 10px 16px;
+    border-radius: 20px;
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
+    font-size: 14.5px; line-height: 1.35; text-align: center; color: var(--ink);
+    animation: rise 0.35s var(--ease) both;
+  }
+  .toast[hidden] { display: none; }
+
+  /* spoken replies on or off. Shows up once voice has been used. */
+  .voice-toggle {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    z-index: 5;
+    display: none; place-items: center;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    color: var(--ink);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
+            backdrop-filter: blur(14px) saturate(1.8);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
+  }
+  .voice-toggle::before { content: ""; position: absolute; inset: -4px; }    /* 44px tap area */
+  .voice-toggle svg { width: 19px; height: 19px; display: block; }
+  .has-voice .voice-toggle { display: grid; }
+  .voice-toggle .off { display: none; }
+  .voice-toggle[aria-pressed="false"] .on { display: none; }
+  .voice-toggle[aria-pressed="false"] .off { display: block; }
+  .voice-toggle[aria-pressed="false"] { color: var(--ink-3); }
 
   .avatar { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
   .avatar__halo {
@@ -679,58 +994,73 @@
   .avatar-btn {
     position: absolute; top: 0; right: 0; bottom: 0;
     width: calc(var(--h) * 1.12);
-    border-radius: 0 calc(var(--h) * 0.34) calc(var(--h) * 0.34) 0;
+    border-radius: 0 calc(var(--h) / 2) calc(var(--h) / 2) 0;
     z-index: 4;
   }
   .bar .avatar-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
-  /* a clear ring on the bar when the text box is reached with the keyboard */
-  .keys .bar:has(#message:focus) {
-    box-shadow:
-      0 20px 44px -20px rgba(16, 19, 17, 0.3),
-      0 3px 10px rgba(16, 19, 17, 0.07),
-      14px 14px 34px -16px rgba(40, 190, 110, 0.5),
-      0 0 0 2px var(--green);
+  /* reached with the keyboard: the ring gets thicker and keeps to the deeper greens, so it is always easy to see */
+  .keys .bar:has(#message:focus) .bar__ring { padding: 2.5px; }
+  .keys .bar:has(#message:focus) .bar__ring i {
+    background: conic-gradient(from 0deg,
+      #0e7a3e 0deg, #0b6b35 60deg, #14964b 150deg, #0e7a3e 200deg,
+      #0b6b35 250deg, #14964b 330deg, #0e7a3e 360deg);
   }
 
   /* ---------- sizes ---------- */
 
+  @media (max-width: 664px) {
+    /* on a phone the chips run off the edge of the screen, like a native row, and each one is real glass */
+    .chips {
+      width: auto; align-self: stretch;
+      margin: 0 calc(max(12px, env(safe-area-inset-right, 0px)) * -1) 0 calc(max(12px, env(safe-area-inset-left, 0px)) * -1);
+      padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: 12px;     /* lined up with the bar */
+      scroll-padding: 0 12px;
+    }
+    .chip:last-child { margin-right: 0; }
+  }
   @media (max-width: 560px) {
-    :root { --h: 60px; --gutter: 16px; }
-    .icon-btn { margin-left: 6px; }
-    .field { padding-left: 4px; padding-right: calc(var(--h) * 1.3); }
-    .row { grid-template-columns: 78px minmax(0, 1fr); padding: 10px 0; }
+    :root { --h: 56px; --gutter: 16px; --pad: 18px; --r-card: 26px; }
+    .field { padding-left: 10px; padding-right: calc(var(--h) * 1.3); }
     .row--stack { grid-template-columns: minmax(0, 1fr); }
-    .row--stack .row__label { margin-bottom: 2px; }
-    .mod { border-radius: 24px; }
-    .opts--days span { height: 54px; }
+    .row--stack .row__label { margin-bottom: 3px; }
+    .opts--days span { height: 52px; }
   }
   @media (max-width: 350px) {
-    :root { --gutter: 12px; }
-    .mod { padding: 15px; }
-    .mod__ghost { inset: 15px; }
-    .opt span { padding: 0 10px; font-size: 14.5px; }
+    :root { --gutter: 12px; --pad: 16px; }
+    .opt span { padding: 0 11px; font-size: 14.5px; }
+    .opts--seg span { padding: 0 14px; }
     .row { grid-template-columns: minmax(0, 1fr); }
-    .row__label { margin-bottom: 2px; }
+    .row__label { margin-bottom: 3px; }
     .copays { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-height: 460px) {
-    :root { --h: 52px; }
+    :root { --h: 48px; }
     .hello { padding-top: 34px; }
-    .dock { gap: 6px; padding-top: 10px; }
+    .dock { padding-top: 4px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path { animation: none; }
+    .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path, .toast { animation: none; }
+    .bar.is-listening .mic::after { animation: none; opacity: 0.8; }
+    .bar.wants-answer:not(.is-listening) .mic::after { animation: none; opacity: 1; }
+    .bar.is-listening .bar__glow { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
     .meter i, .btn, .opt span, .chip, .send { transition-duration: 0.01s; }
+    /* the ring still lights up, it just does not travel or breathe, and the lens moves at once */
+    .bar .bar__ring i { animation: none !important; }
+    .bar__ring, .bar__glow, .opts--seg::before { transition-duration: 0.01s; }
   }
 </style>
 </head>
 <body>
 
 <div class="app" id="app">
-  <div class="tag">Prototype · sample data</div>
+  <div class="tag">Carely · prototype · sample data</div>
+  <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true" aria-label="Spoken replies">
+    <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.2 6.5a8 8 0 0 1 0 11"/></svg>
+    <svg class="off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/></svg>
+  </button>
 
   <main class="page" id="page" tabindex="-1">
     <div class="column">
@@ -744,9 +1074,12 @@
   </main>
 
   <div class="dock">
+    <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
     <div class="chips" id="chips" role="group" aria-label="Things you can ask"></div>
 
     <form class="bar" id="bar" autocomplete="off" novalidate>
+      <span class="bar__glow" aria-hidden="true"></span>
+      <span class="bar__ring" aria-hidden="true"><i></i></span>
       <div class="avatar" id="avatar" aria-hidden="true">
         <span class="avatar__halo"></span>
         <span class="avatar__body"></span>
@@ -766,11 +1099,17 @@
       <div class="field">
         <label class="sr-only" for="message">Ask about your health plan</label>
         <input id="message" name="message" type="text" inputmode="text" enterkeyhint="send"
-               placeholder="Ask anything" autocomplete="off" autocapitalize="sentences" spellcheck="true" maxlength="300" />
+               placeholder="Ask Carely" autocomplete="off" autocapitalize="sentences" spellcheck="true" maxlength="300" />
         <button class="send" id="send" type="submit" aria-label="Send" tabindex="-1">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 19V5.5"/><path d="M6 11.2 12 5.2l6 6"/>
           </svg>
+        </button>
+        <button class="mic" id="mic" type="button" aria-pressed="false" aria-label="Talk instead of typing">
+          <svg class="wave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.8 11.5a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.7v2.8"/>
+          </svg>
+          <svg class="stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="7.5" y="7.5" width="9" height="9" rx="2.2" fill="currentColor"/></svg>
         </button>
       </div>
 
@@ -911,6 +1250,10 @@
     if (urgent === "emergency")
       return { say: "If this could be an emergency, call 911 now. If it can wait a little, here are fast ways to get care.", ui: [{ type: "urgent", props: { poison: /swallow|poison|too (many|much)|overdose/.test(t) } }], next: ["Find urgent care near me", "Talk to a person"] };
 
+    // how it sounds. This is a setting for whoever runs the prototype, not a member feature
+    if (/\bvoice (settings?|set ?up|options?)\b|\b(change|pick|choose|set ?up|switch) (your |the |a |my )?voice\b|natural voice|eleven ?labs|how you sound/.test(t))
+      return { say: "Here is how I sound. You can pick a more natural voice.", ui: [{ type: "voice", props: {} }], next: HOME_CHIPS };
+
     if (/id card|member id|insurance card|my card|member number/.test(t))
       return { say: "Here is your member ID card. You can show this at any visit.", ui: [{ type: "idcard", props: {} }], next: ["Schedule a visit", "My deductible"] };
 
@@ -986,7 +1329,7 @@
       return { say: "Sure. I can have a person call you. I will pass along what we talked about so you do not have to repeat it.", ui: [{ type: "handoff", props: { topic: /wrong|appeal|complain/.test(t) ? "A problem with a claim" : "" } }], next: ["Where is my claim?", "Show my ID card"] };
 
     if (/^(hi|hey|hello|yo|good (morning|afternoon|evening))\b/.test(t))
-      return { say: `Hi ${MEMBER.first}. I can book visits, check what your plan covers, track claims and more. What do you need?`, ui: [], next: HOME_CHIPS };
+      return { say: `Hi ${MEMBER.first}. I am Carely. I can book visits, check what your plan covers, track claims and more. What do you need?`, ui: [], next: HOME_CHIPS };
     if (/thank/.test(t))
       return { say: "Any time. I am here if you need anything else.", ui: [], next: HOME_CHIPS };
 
@@ -1012,6 +1355,7 @@
     alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3.5 19h17z"/><path d="M12 10v4M12 16.8v.2"/></svg>',
     spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v4M12 16v4M4 12h4M16 12h4M6.5 6.5l2.5 2.5M15 15l2.5 2.5M17.5 6.5 15 9M9 15l-2.5 2.5"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5.5 12.5 4.3 4.3 8.7-9.3"/></svg>',
+    voice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.2 6.5a8 8 0 0 1 0 11"/></svg>',
   };
 
   let seq = 0;
@@ -1149,6 +1493,7 @@
         return changed;
       },
       help: "I can change the day, the time of day, or switch to video. Try Thursday afternoon. Say confirm when it looks right.",
+      readback: () => `${doc.name}, ${fmt(days[st.day], { weekday: "long" })} at ${SLOTS[st.day][st.slot]}, ${st.video ? "by video" : "in person"}. You pay ${money(cost())}. Is that right?`,
       costLine: () => `This visit would cost you ${money(cost())}. ${free() ? "Yearly checkups and vaccines are $0 with your plan." : "That is your copay."} Say confirm when it looks right.`,
       confirm: () => confirmBtn.click(),
       skip: () => $("[data-skip]", m.el).click(),
@@ -1450,6 +1795,7 @@
         return changed;
       },
       help: "I can make it a 90 day supply or send it by mail. Say confirm when it looks right.",
+      readback: () => `A ${st.supply} day supply, ${st.how === "pickup" ? "for pick up" : "sent by mail"}, for ${money(cost())}. Is that right?`,
       confirm: () => confirmBtn.click(),
       skip: () => $("[data-skip]", m.el).click(),
     };
@@ -1479,6 +1825,168 @@
     return m.el;
   };
 
+  /* ---- how it sounds: a setting for whoever runs the prototype ---- */
+  MODULES.voice = (p, api) => {
+    const m = shell("Voice", ICON.voice, '<span class="pill">Prototype setting</span>');
+    const n = m.id;
+    let now = voice.natural.state();
+    let list = now.voices;                 // a few ready made voices, until the account's own list arrives
+    let picked = now.hasKey ? now.voice : now.voices[0].id;      // "" is the phone's own voice, "other" is a pasted voice ID. The first time, start on the suggested voice
+    let style = now.style;                 // "quick" or "rich"
+    let when = now.always ? "always" : "talk";      // when answers are read aloud
+    let saved = false;
+    m.body.innerHTML =
+      `<div class="row row--full part"><span class="row__label" id="${n}-vl">Voice</span>
+         <div class="opts" role="radiogroup" aria-labelledby="${n}-vl" data-voices></div>
+         <button class="btn btn--text" type="button" data-more hidden></button>
+         <span class="note" data-feel aria-live="polite"></span></div>
+       <div class="row row--full part" data-row="other"><label class="row__label" for="${n}-id">Voice ID</label>
+         <input class="inline-input" id="${n}-id" type="text" maxlength="40" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="Paste the ID" /></div>
+       <div class="row row--full part" data-row="style"><span class="row__label" id="${n}-sl">Speed</span>
+         <div class="opts" role="radiogroup" aria-labelledby="${n}-sl">
+           <label class="opt"><input type="radio" name="${n}-s" value="rich"${now.style === "quick" ? "" : " checked"} /><span>Most lifelike</span></label>
+           <label class="opt"><input type="radio" name="${n}-s" value="quick"${now.style === "quick" ? " checked" : ""} /><span>Quicker</span></label></div>
+         <span class="note" data-pace aria-live="polite"></span></div>
+       <div class="row row--full part" data-row="when"><span class="row__label" id="${n}-wl">Read aloud</span>
+         <div class="opts" role="radiogroup" aria-labelledby="${n}-wl">
+           <label class="opt"><input type="radio" name="${n}-w" value="talk"${now.always ? "" : " checked"}${now.hears ? "" : " disabled"} /><span>After I talk</span></label>
+           <label class="opt"><input type="radio" name="${n}-w" value="always"${now.always ? " checked" : ""} /><span>Always</span></label></div>
+         <span class="note" data-when aria-live="polite"></span></div>
+       <div class="row row--full part" data-row="key"><label class="row__label" for="${n}-key">ElevenLabs key</label>
+         <input class="inline-input" id="${n}-key" type="password" maxlength="200" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" /></div>
+       <p class="fine part" data-about>The natural voices come from ElevenLabs and need your own API key. Make one in your ElevenLabs account with Text to Speech and Voices (read) turned on, and give it a credit limit. The key is kept in this browser only. Each sample and each answer that is read aloud is sent to ElevenLabs and uses your credits.</p>
+       <p class="fine part" data-msg id="${n}-msg" role="status" hidden></p>`;
+    m.actions.innerHTML =
+      `<button class="btn btn--primary part" type="button" data-save>Use this voice</button>
+       <button class="btn btn--quiet part" type="button" data-try>Play a sample</button>
+       <button class="btn btn--text part" type="button" data-forget>Remove the key</button>`;
+    const voicesEl = $("[data-voices]", m.el), feelEl = $("[data-feel]", m.el), idRow = $('[data-row="other"]', m.el), keyRow = $('[data-row="key"]', m.el);
+    const styleRow = $('[data-row="style"]', m.el), paceEl = $("[data-pace]", m.el), moreBtn = $("[data-more]", m.el), whenEl = $("[data-when]", m.el);
+    const about = $("[data-about]", m.el), msg = $("[data-msg]", m.el), idEl = $(`#${n}-id`, m.el), keyEl = $(`#${n}-key`, m.el);
+    const forgetBtn = $("[data-forget]", m.el), saveBtn = $("[data-save]", m.el), tryBtn = $("[data-try]", m.el);
+    const find = (id) => list.find((v) => v.id === id);
+    const voiceId = () => (picked === "other" ? idEl.value.trim() : picked);
+    // one message line. A message about a field sits right under that field and is tied to it for screen readers
+    const tell = (text, kind = "", field = null) => {
+      const spot = field ? field.closest(".row") : about;
+      if (msg.previousElementSibling !== spot) spot.after(msg);
+      [idEl, keyEl].forEach((el) => { if (el === field) el.setAttribute("aria-describedby", msg.id); else el.removeAttribute("aria-describedby"); });
+      msg.textContent = text; msg.hidden = !text; msg.className = "fine part" + (kind ? " is-" + kind : "");
+    };
+    const put = (el, text) => { if (el.textContent !== text) el.textContent = text; };      // the same words are not announced twice
+    const busyButtons = (on) => [saveBtn, tryBtn].forEach((b) => { if (on) b.setAttribute("aria-disabled", "true"); else b.removeAttribute("aria-disabled"); });
+    const backToVoices = () => { const on = $("input:checked", voicesEl); if (on) on.focus({ preventScroll: true }); };
+    if (picked && !find(picked)) { idEl.value = picked; picked = "other"; }
+    let showAll = false;
+    function drawVoices() {
+      const chip = (value, name) => `<label class="opt"><input type="radio" name="${n}-v" value="${esc(value)}"${picked === value ? " checked" : ""} /><span>${esc(name)}</span></label>`;
+      const shown = showAll ? list : list.filter((v, i) => i < 7 || v.id === picked);       // a long list starts short
+      voicesEl.innerHTML = chip("", "Phone voice") + shown.map((v) => chip(v.id, v.name)).join("") + chip("other", "Another");
+      moreBtn.hidden = shown.length === list.length;
+      moreBtn.textContent = `Show all ${list.length} voices`;
+    }
+    function draw() {
+      const v = find(picked);
+      put(feelEl, picked === "" ? "The voice built into this phone or computer."
+        : picked === "other" ? "Any voice from ElevenLabs. Paste its voice ID."
+        : ((v && v.feel) || "A voice from ElevenLabs.") + (v && v.lib ? " From the ElevenLabs voice library, so it needs a paid plan." : ""));
+      put(paceEl, style === "quick" ? "Each answer starts after about 1 second." : "The newest ElevenLabs model. More feeling, but each answer starts after about 3 seconds.");
+      put(whenEl, !now.hears ? "This browser cannot listen, so every answer is read aloud, also when you type."
+        : when === "always" ? "Every answer is read aloud, also when you type or tap."
+        : "Answers are read aloud only after you ask out loud. Typed questions stay silent.");
+      idRow.hidden = picked !== "other";
+      keyRow.hidden = styleRow.hidden = about.hidden = picked === "";
+      keyEl.placeholder = now.hasKey ? "Saved in this browser" : "Paste your key";
+      forgetBtn.hidden = !now.hasKey;
+    }
+    drawVoices();
+    draw();
+    if (now.off && picked !== "") tell(now.off + " The natural voice is off until it works here.", "bad");
+    m.el.addEventListener("change", (e) => {
+      if (e.target.name === `${n}-v`) { picked = e.target.value; morph(m.el, draw); tell(""); }
+      if (e.target.name === `${n}-s`) { style = e.target.value; morph(m.el, draw); tell(""); }
+      if (e.target.name === `${n}-w`) { when = e.target.value; morph(m.el, draw); tell(""); }
+      if (e.target === keyEl) loadMine(keyEl.value.trim());
+    });
+    moreBtn.addEventListener("click", () => {
+      showAll = true;
+      morph(m.el, drawVoices);
+      const first = voicesEl.querySelector("input:checked") || voicesEl.querySelector("input");
+      if (first) first.focus({ preventScroll: true });       // the button is gone, so focus moves into the list
+    });
+    [idEl, keyEl].forEach((el) => el.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); el.blur(); } }));
+
+    // with a key, show the voices that are really in that ElevenLabs account
+    let asked = "";
+    async function loadMine(key) {
+      if (key ? key.length < 20 : !now.hasKey) return;
+      if (asked === (key || "saved")) return;
+      asked = key || "saved";
+      const mine = await voice.natural.list(key);
+      if (!mine || saved || !m.el.isConnected || asked !== (key || "saved")) return;      // too late: the card moved on, or the key changed
+      const want = voiceId();
+      // the account's own voices come first. Of the ready made ones only library voices are kept: they can be used by ID
+      list = mine.concat(now.voices.filter((v) => v.lib && !mine.some((x) => x.id === v.id)));
+      if (picked !== "" && want && find(want)) picked = want;
+      else if (picked !== "" && picked !== "other") { idEl.value = picked; picked = "other"; }
+      const at = document.activeElement, keep = voicesEl.contains(at);
+      morph(m.el, () => { drawVoices(); draw(); });
+      if (keep) backToVoices();              // the list was redrawn under the keyboard focus
+    }
+    loadMine("");
+
+    // check what is on the card. Returns what to play, or null after saying what is missing
+    function read() {
+      const id = voiceId(), key = keyEl.value.trim();
+      if (picked === "") return { id: "", key: "", style: "" };         // the phone's own voice needs nothing
+      if (!id) { tell("Paste the voice ID first.", "bad", idEl); idEl.focus(); return null; }
+      if (!/^[A-Za-z0-9]{8,40}$/.test(id)) { tell("That does not look like a voice ID. It is a short code of letters and numbers.", "bad", idEl); idEl.focus(); return null; }
+      if (!key && !voice.natural.state().hasKey) { tell("Paste your ElevenLabs key first.", "bad", keyEl); keyEl.focus(); return null; }      // asked afresh: another card may have removed the key
+      return { id, key, style };
+    }
+    let working = false;
+    async function play(andSave) {
+      if (working || saved) return;
+      const pick = read();
+      if (!pick) return;
+      working = true;
+      busyButtons(true);
+      tell(pick.id ? "Getting the voice ready..." : "Playing...");
+      const heard = await voice.natural.sample(pick.key, pick.id, pick.style);       // the tap that got us here is what lets a phone play sound
+      if (!working) return;                               // the key was removed while the sample was on its way
+      working = false;
+      busyButtons(false);
+      if (!heard.ok) { tell(heard.why + (andSave ? " Nothing was changed." : ""), "bad"); return; }
+      if (!andSave) { tell("That is how it sounds.", "good"); return; }
+      const aloud = when === "always" || !now.hears;
+      voice.natural.save(pick.key, pick.id, pick.style, aloud);
+      saved = true;
+      flow.querySelectorAll('[data-row="key"] input').forEach((el) => { el.value = ""; });      // the key is not left sitting in the page, also not in an older Voice card
+      const v = find(pick.id), name = !pick.id ? "The phone's own voice" : v ? `${v.name}, from ElevenLabs` : "Your ElevenLabs voice";
+      morph(m.el, () => {
+        m.pill().textContent = "Saved"; m.pill().className = "pill pill--ok";
+        m.body.innerHTML = `<div class="done part" style="padding-bottom:4px"><span class="done__check" aria-hidden="true">${ICON.check}</span><div><b>Voice saved</b><span>${esc(name)}</span></div></div>`;
+        m.actions.innerHTML = `<button class="btn btn--quiet part" type="button" data-again>Change it</button>`;
+        $("[data-again]", m.el).addEventListener("click", () => api.ask("Voice settings"));
+      });
+      landFocus(m.el);
+      api.say(aloud ? "Saved. I will read every answer aloud in this voice." : "Saved. I will use this voice when you talk to me. Tap the microphone to try it.", HOME_CHIPS, true);     // shown, not spoken: the sample is still playing
+    }
+    saveBtn.addEventListener("click", () => play(true));
+    tryBtn.addEventListener("click", () => play(false));
+    forgetBtn.addEventListener("click", () => {
+      voice.natural.forget();
+      now = voice.natural.state();
+      list = now.voices; picked = ""; idEl.value = ""; asked = ""; showAll = false; working = false;
+      busyButtons(false);
+      flow.querySelectorAll('[data-row="key"] input').forEach((el) => { el.value = ""; });      // also in an older Voice card
+      morph(m.el, () => { drawVoices(); draw(); });
+      tell("The key is removed from this browser. I am using the phone's voice.", "good");
+      backToVoices();                        // the button that was pressed is gone
+    });
+    return m.el;
+  };
+
   /* ---- talk to a person ---- */
   MODULES.handoff = (p, api) => {
     const m = shell("Talk to a person", ICON.phone, '<span class="pill">Draft</span>');
@@ -1495,6 +2003,7 @@
     const draft = {
       kind: "call", open: true, el: m.el,
       help: "Pick a time on the card, then say confirm and I will request the call.",
+      readback: () => `A call back, ${st.when.toLowerCase()}. Is that right?`,
       confirm: () => $("[data-confirm]", m.el).click(),
       skip: () => $("[data-skip]", m.el).click(),
     };
@@ -1579,7 +2088,7 @@
     const end = new Date(start.getTime() + 30 * 60000);
     const stamp = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}${String(d.getMinutes()).padStart(2, "0")}00`;
     const clean = (s) => String(s).replace(/([,;\\])/g, "\\$1").replace(/\n/g, " ");
-    const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Member assistant prototype//EN", "BEGIN:VEVENT",
+    const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Carely prototype//EN", "BEGIN:VEVENT",
       `UID:${Date.now()}@member-assistant.example`, `DTSTAMP:${stamp(new Date())}`, `DTSTART:${stamp(start)}`, `DTEND:${stamp(end)}`,
       `SUMMARY:${clean(title)}`, `LOCATION:${clean(place)}`, `DESCRIPTION:${clean("Reason: " + reason)}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
     try {
@@ -1723,22 +2232,39 @@
       liveDrafts[d.kind] = d;
     }
     activeDraft = d;
-    input.placeholder = d && d.set ? "Tell me what to change" : "Ask anything";
+    input.placeholder = d && d.set ? "Any changes?" : "Ask Carely";
   }
   const DAY_RE = [/\bsun(day)?\b/, /\bmon(day)?\b/, /\btue(s|sday)?\b/, /\bwed(nesday)?\b/, /\bthu(r|rs|rsday)?\b/, /\bfri(day)?\b/, /\bsat(urday)?\b/];
   // only a whole short message counts as yes or no. "ok but make it thursday" is an edit.
-  const whole = (words) => new RegExp("^(please )?(" + words + ")(( and)?[ ,.!]+(" + words + "|please|thanks|thank you|it|that))*[ .!]*$");
+  const whole = (words, extra = "please|thanks|thank you|it|that") => new RegExp("^(please )?(" + words + ")(( and)?[ ,.!]+(" + words + "|" + extra + "))*[ .!]*$");
   const YES = whole("yes|yep|yeah|sure|ok|okay|confirm|confirm it|book it|book that|schedule it|order it|looks good|do it|go ahead|that works|sounds good|perfect");
   const NO = whole("no|nope|cancel|cancel it|never ?mind|not now|stop|forget it|do not book it|don.?t book it|do not order it|don.?t order it");
-  function readEdit(text) {
+  // Spoken words can be misheard, so by voice a draft is never committed on one word:
+  // "confirm" makes it read the details back and ask "Is that right?", and only a clear yes after that commits.
+  // No loose "it" or "that" after a spoken yes: "correct that" means fix it, and "yes, that..." is a sentence cut short.
+  const VOICE_YES = whole("yes|yes it is|yep|yeah|correct|right|that is right|that.?s right|it is", "please|thanks|thank you|confirm|confirm it|book it|order it|go ahead");
+  const VOICE_NO = whole("no|nope|not right|wrong|that is wrong|that.?s wrong|cancel|stop|wait");
+  function readEdit(text, viaVoice) {
     const d = activeDraft;
     if (!d || !d.open || !d.el.isConnected) return null;
     let t = text.toLowerCase().trim();
-    if (YES.test(t)) return { act: "confirm" };
-    if (NO.test(t)) return { act: "skip" };
+    const decide = () => {
+      if (viaVoice && d.asked && d.asked === d.readback()) {      // the card may have been changed by tap since the read back
+        if (VOICE_YES.test(t)) return { act: "confirm" };
+        if (VOICE_NO.test(t)) return { act: "keep" };
+        if (YES.test(t)) return { act: "readback", again: true };      // "confirm", "ok" or "book it" again: ask once more
+        return null;
+      }
+      if (YES.test(t)) return { act: viaVoice ? "readback" : "confirm" };
+      if (NO.test(t)) return { act: "skip" };
+      return null;
+    };
+    let hit = decide();
+    if (hit) return hit;
     t = t.replace(/^(yes|yep|yeah|sure|ok|okay)\b[\s,.!]*(but\s+)?/, "");      // drop a leading "ok," and read the rest
-    if (YES.test(t)) return { act: "confirm" };
-    if (NO.test(t)) return { act: "skip" };
+    hit = decide();
+    if (hit) return hit;
+    d.asked = false;                             // anything else is a change or a new request, so the question is off
     const lost = () => (understand(text).unknown ? { act: "help" } : null);      // keep the draft when the message means nothing else
     if (d.kind === "refill") {
       const patch = {};
@@ -1777,17 +2303,27 @@
   }
 
   // a short exchange about the card that is already on screen (no new card)
-  async function editInPlace(text, edit) {
+  async function editInPlace(text, edit, viaVoice) {
     const d = activeDraft, turn = d.el.closest(".turn") || flow.lastElementChild;
     busy = true;
     try {
     const q = document.createElement("div");
-    q.className = "ask"; q.style.marginTop = "18px"; q.textContent = text;
+    q.className = viaVoice ? "ask ask--voice" : "ask"; q.style.marginTop = "18px"; q.textContent = text;
     turn.appendChild(q);
     face.sent(q);
     const glide = reduceMotion.matches ? "auto" : "smooth";
-    if (edit.act === "help" || edit.act === "tell") {
+    if (edit.act === "readback" || edit.act === "keep") {
+      // by voice: read the details back and wait for a clear yes, or step back from that question
+      d.asked = edit.act === "readback" ? d.readback() : false;      // remember exactly what was read back
+      const line = d.asked ? (edit.again ? "Please answer yes or no. " : "") + d.readback() : "Okay. Nothing is done yet. Tell me what to change.";
+      d.el.scrollIntoView({ block: "nearest", behavior: glide });
+      voice.say(line);
+      await speak(turn, line, "say--after");
+      turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
+      statusEl.textContent = line;
+    } else if (edit.act === "help" || edit.act === "tell") {
       const line = edit.act === "tell" ? edit.line : d.help;
+      voice.say(line);
       await speak(turn, line, "say--after");
       turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
       statusEl.textContent = line;
@@ -1797,13 +2333,14 @@
       const row = d.el.querySelector(".row.flash") || d.el;
       row.scrollIntoView({ block: "center", behavior: glide });
       await wait(pace(350));
+      voice.say(line);
       await speak(turn, line, "say--after");
       turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });     // the reply stops just above the chat bar
       statusEl.textContent = line;
       face.lookAtEl(row);
     } else if (edit.act === "confirm") d.confirm();
     else d.skip();
-    } finally { busy = false; }
+    } finally { busy = false; voice.afterTurn(); }
     return true;
   }
 
@@ -1812,7 +2349,8 @@
     return {
       draft: (d) => setDraft(d),
       ask: (text) => ask(text),
-      say: (text, next) => {
+      say: (text, next, silent) => {
+        if (!silent) voice.say(text);
         speak(turn, text, "say--after");
         const line = turn.lastElementChild;
         requestAnimationFrame(() => keepInView(line, line));
@@ -1824,13 +2362,16 @@
     };
   }
 
-  async function ask(raw) {
+  async function ask(raw, how) {
     const text = String(raw || "").trim();
     if (!text || busy) return false;
+    const viaVoice = how === "voice";
+    if (viaVoice) voice.hush(); else voice.cancel();                       // a new request stops anything being read aloud. A tapped or typed one also closes the microphone
     if (window.matchMedia("(pointer: coarse)").matches) input.blur();     // on phones, put the keyboard away so the card has room
-    const edit = isUrgent(text) ? null : readEdit(text);   // safety always wins over an open draft
-    if (edit) return editInPlace(text, edit);
+    const edit = isUrgent(text) ? null : readEdit(text, viaVoice);   // safety always wins over an open draft
+    if (edit) return editInPlace(text, edit, viaVoice);
     busy = true;
+    setThinking(true);                                // visual only: the gradient ring comes alive while the answer is made
     try {
     app.classList.add("has-flow");
     setDraft(null);                                   // a new request: older drafts can still be tapped, but typing no longer changes them
@@ -1839,7 +2380,7 @@
     const turn = document.createElement("article");
     turn.className = "turn";
     const q = document.createElement("div");
-    q.className = "ask";
+    q.className = viaVoice ? "ask ask--voice" : "ask";
     q.textContent = text;
     turn.appendChild(q);
     flow.appendChild(turn);
@@ -1851,9 +2392,16 @@
     catch (err) { spec = { say: "Something went wrong on my side. Please try again.", ui: [], next: HOME_CHIPS }; }
     if (!/talk to|person|wrong/.test(text.toLowerCase())) lastAsk = text;
 
+    // in voice mode the sentence is also read aloud. A draft adds what the member can say next.
+    const isDraft = (spec.ui || []).some((u) => u.type === "schedule" || u.type === "refill" || u.type === "handoff");
+    const aloud = spec.say + (isDraft ? voice.hint() : "");
+    const urgent = isUrgent(text);                    // an emergency is said at once by the phone's own voice. It never waits on the network
+    const early = urgent || voice.early();
+    if (early) voice.say(aloud, urgent);              // the natural voice takes a moment to arrive, so it is asked for at once
     await wait(pace(260));
     face.think(true);
     await wait(pace(rand(320, 520)));
+    if (!early) voice.say(aloud);
     await Promise.race([speak(turn, spec.say), wait(pace(380))]);     // the card starts while the sentence is still arriving
     let last = null;
     for (const ui of spec.ui || []) last = (await mount(turn, ui)) || last;
@@ -1866,12 +2414,13 @@
       const line = turn.querySelector(".say");
       if (line) { line.tabIndex = -1; line.focus({ preventScroll: true }); }
     }
-    } finally { busy = false; face.think(false); }
+    } finally { busy = false; face.think(false); setThinking(false); voice.afterTurn(); }
     return true;
   }
 
   function goHome() {
     if (busy) return;
+    voice.cancel();
     flow.innerHTML = "";
     setDraft(null);
     app.classList.remove("has-flow");
@@ -1927,8 +2476,22 @@
         eyes.ty = -0.72 + Math.sin(s * 4.8) * 0.06;
         eyes.glowTarget = 0.95 + Math.sin(s * 5) * 0.12;
       }
+      if (mode === "listening") {                 // looks straight at you, eyes a little wider, breathing softly
+        const s = t / 1000;
+        eyes.tx = Math.sin(s * 1.1) * 0.05;
+        eyes.ty = -0.04;
+        eyes.openTarget = 1.1;
+        eyes.glowTarget = 1 + Math.sin(s * 3.2) * 0.07;
+      }
+      if (mode === "talking") {                   // a small quick flutter, like speech
+        const s = t / 1000;
+        eyes.tx = -0.15 + Math.sin(s * 0.9) * 0.08;
+        eyes.ty = -0.08;
+        eyes.openTarget = 1 + Math.sin(s * 10) * 0.06 + Math.sin(s * 6.3) * 0.03;
+        eyes.glowTarget = 1 + Math.sin(s * 8) * 0.1;
+      }
       render();
-      const settled = mode !== "thinking" &&
+      const settled = mode !== "thinking" && mode !== "listening" && mode !== "talking" &&
         Math.abs(eyes.tx - eyes.x) < 0.002 && Math.abs(eyes.ty - eyes.y) < 0.002 &&
         Math.abs(eyes.vx) < 0.01 && Math.abs(eyes.vy) < 0.01 &&
         Math.abs(eyes.lidTarget - eyes.lid) < 0.005 && Math.abs(eyes.openTarget - eyes.open) < 0.005 &&
@@ -1993,6 +2556,8 @@
       }, rand(1100, 3400));
     }
 
+    let voiceState = "";
+    const thinkers = new Set();
     function setMode(next) {
       mode = next;
       if (next === "idle") { eyes.glowTarget = 0.85; eyes.openTarget = document.activeElement === input ? 1.05 : 1; }
@@ -2001,7 +2566,10 @@
 
     let followTimer = 0;
     function follow(px, py) {
-      if (reduceMotion.matches || mode === "thinking") return;
+      // visual only: the highlight on the glass slides toward the pointer or finger
+      const br = bar.getBoundingClientRect();
+      bar.style.setProperty("--mx", clamp(((px - br.left) / br.width) * 100, 6, 74).toFixed(1) + "%");
+      if (reduceMotion.matches || mode === "thinking" || mode === "listening" || mode === "talking") return;
       mode = "follow";
       lookAtPoint(px, py);
       clearTimeout(followTimer);
@@ -2026,10 +2594,11 @@
     window.addEventListener("touchmove", (e) => { const t = e.touches[0]; if (t) follow(t.clientX, t.clientY); }, { passive: true });
     document.documentElement.addEventListener("pointerleave", () => { if (mode === "follow") setMode("idle"); });
 
-    input.addEventListener("focus", () => { eyes.openTarget = 1.05; if (mode !== "thinking") { setMode(input.value ? "typing" : "idle"); watchCaret(); } });
+    const live = () => mode === "thinking" || mode === "listening" || mode === "talking";
+    input.addEventListener("focus", () => { eyes.openTarget = 1.05; if (!live()) { setMode(input.value ? "typing" : "idle"); watchCaret(); } });
     input.addEventListener("blur", () => { eyes.openTarget = 1; if (mode === "typing") setMode("idle"); wake(); });
     input.addEventListener("input", () => {
-      if (mode === "thinking") return;
+      if (live()) return;
       setMode("typing"); watchCaret();
       if (!reduceMotion.matches) eyes.hopV -= 0.22;
       wake();
@@ -2048,7 +2617,20 @@
       resize() { readSize(); render(); },
       blink,
       lookAtEl,
-      think(on) { if (reduceMotion.matches) return; if (on) setMode("thinking"); else { setMode("idle"); wander(); } },
+      // `who` lets two things think at once: an answer being made, and the natural voice on its way
+      think(on, who = "answer") {
+        if (on) thinkers.add(who); else thinkers.delete(who);
+        if (reduceMotion.matches) return;
+        if (thinkers.size) setMode("thinking");
+        else { setMode(voiceState === "talking" || voiceState === "listening" ? voiceState : "idle"); wander(); }
+      },
+      // voice: "listening", "talking" or "" (back to normal)
+      voice(state) {
+        voiceState = state;
+        if (reduceMotion.matches || mode === "thinking") return;
+        if (state) setMode(state); else { eyes.openTarget = 1; setMode("idle"); wander(); }
+      },
+      heard() { if (!reduceMotion.matches) { eyes.hopV -= 0.5; wake(); } },      // a small nod each time new words arrive
       sent(el) {
         if (reduceMotion.matches) return;
         eyes.hopV -= 1.5; eyes.openTarget = 0.5; eyes.glowTarget = 1.15; wake();
@@ -2079,12 +2661,16 @@
   function syncBar() {
     const hasText = input.value.trim().length > 0;
     bar.classList.toggle("has-text", hasText);
-    sendBtn.tabIndex = hasText ? 0 : -1;
-    avatarBtn.setAttribute("aria-label", hasText ? "Send" : "Start typing");
+    const hearing = bar.classList.contains("is-listening"), talking = bar.classList.contains("is-speaking");
+    sendBtn.tabIndex = hasText && !hearing ? 0 : -1;             // send is hidden while it listens
+    $("#mic").tabIndex = hasText && !hearing ? -1 : 0;
+    avatarBtn.setAttribute("aria-label", hearing ? "Cancel listening" : talking ? "Stop speaking" : hasText ? "Send" : "Start typing");
   }
   async function submit() {
+    if (voice.sendHeard()) return;               // heard words are always sent as voice, never as typed text
     const text = input.value.trim();
     if (!text || busy) return;
+    voice.typed();                               // typing means answers are shown, not read aloud
     input.value = "";
     syncBar();
     syncChips();
@@ -2092,12 +2678,16 @@
   }
   input.addEventListener("input", () => { syncBar(); syncChips(); });
   bar.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
-  avatarBtn.addEventListener("click", () => { if (input.value.trim()) submit(); else { input.focus(); face.hello(); } });
+  avatarBtn.addEventListener("click", () => {
+    if (voice.busy()) { voice.cancel(); return; }             // tapping the face stops listening or speaking
+    if (input.value.trim()) submit(); else { input.focus(); face.hello(); }
+  });
   homeBtn.addEventListener("click", () => { goHome(); face.blink(1, 60); });
 
   // Page Up, Page Down and the arrow keys scroll the conversation, even while the text box has focus
   document.addEventListener("keydown", (e) => {
     if (e.key === "Tab") root.classList.add("keys");
+    if (e.key === "Escape" && voice.busy()) { voice.cancel(); return; }       // Escape stops listening or speaking
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.target !== input && e.target !== document.body) return;
     const arrows = e.target !== input || !input.value;
@@ -2128,6 +2718,736 @@
   window.addEventListener("resize", onResize);
   window.addEventListener("orientationchange", onResize);
 
+  /* ---- glass (visual only, no behavior) ---- */
+  // the gradient ring's color wheel is squashed to the bar's own proportions, so the greens travel evenly
+  function syncGlass() { bar.style.setProperty("--ring-k", (bar.offsetHeight / Math.max(1, bar.offsetWidth)).toFixed(4)); }
+  window.addEventListener("resize", syncGlass);
+  // the ring keeps flowing while it fades out, and flows faster while the assistant thinks
+  const ringWheel = $(".bar__ring i");
+  let ringRest = 0;
+  function ringWake() { clearTimeout(ringRest); bar.classList.add("is-lit"); }
+  function ringSleep() {
+    clearTimeout(ringRest);
+    ringRest = setTimeout(() => {
+      const awake = bar.matches(":focus-within") || ["is-thinking", "is-listening", "is-speaking"].some((c) => bar.classList.contains(c));
+      if (!awake) bar.classList.remove("is-lit");
+    }, 800);
+  }
+  function ringPace(rate) {
+    const flow = ringWheel && ringWheel.getAnimations ? ringWheel.getAnimations()[0] : null;
+    if (flow && flow.updatePlaybackRate) flow.updatePlaybackRate(rate);
+  }
+  function setThinking(on) {
+    bar.classList.toggle("is-thinking", on);
+    if (on) { ringWake(); ringPace(3.2); } else { ringPace(1); ringSleep(); }
+  }
+  bar.addEventListener("focusin", ringWake);
+  bar.addEventListener("focusout", ringSleep);
+
+
+  /* =========================================================
+     7. VOICE
+     Talk instead of typing, and hear the answer.
+     Listening uses the browser's speech service (SpeechRecognition).
+     Speaking uses the built-in voices (speechSynthesis).
+     Nothing here needs a server of ours. A real health product should not
+     send member speech through a browser's consumer speech service. It would
+     use on-device recognition or a speech provider under a privacy agreement.
+
+     Rules this follows:
+       - voice never does more than typing, and is stricter: by voice a draft is read back
+         and needs a clear yes before it is committed. Paying is by tap only
+       - safety words win, exactly as they do for typed text, and are checked while listening
+       - it never listens while it is talking, so it cannot hear itself
+       - answers are only read aloud after the member has spoken, and can be switched off
+       - everything spoken is also on screen, and everything heard is shown as text
+       - every phone is different, so it tries, watches the clock, and falls back to the
+         microphone key on the keyboard when the browser will not listen
+     ========================================================= */
+
+  const voice = (() => {
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const synth = window.speechSynthesis;
+    const canSpeak = !!(synth && window.SpeechSynthesisUtterance);
+
+    /* A more natural voice (optional). ElevenLabs turns each short answer into sound.
+       Whoever runs the prototype pastes their own key in the Voice card. The key is kept in this browser
+       and goes to ElevenLabs and nowhere else. It is never part of this file.
+       If anything goes wrong the phone's own voice is used, so an answer is never lost. */
+    const NATURAL = {
+      api: "https://api.elevenlabs.io/",
+      // two ways it can sound. In each, the first model is used. If ElevenLabs refuses it, the next one is tried
+      styles: {"quick": {"models": ["eleven_multilingual_v2", "eleven_flash_v2_5"], "wait": 7000}, "rich": {"models": ["eleven_v4", "eleven_multilingual_v2"], "wait": 10000}},
+      format: "mp3_44100_128",
+      settings: {"stability": 0.5, "similarity_boost": 0.75},              // only the two settings every model accepts
+      sample: "Hi, I am Carely, your health plan assistant. I can book a visit, check a claim, or find a doctor near you.",
+      // A few ready made voices, described by how they sound. The Voice card swaps in the account's own list when it has a key.
+      voices: [
+        {"id": "cgSgspJ2msm6clMCkdW9", "name": "Jessica", "feel": "Playful, bright and warm."},
+        {"id": "hpp4J3VqNfWAUOO0d1Us", "name": "Bella", "feel": "Bright, warm and polished."},
+        {"id": "EXAVITQu4vr4xnSDxMaL", "name": "Sarah", "feel": "Calm and reassuring."},
+        {"id": "FGY2WhTYpPnrIDTdsKH5", "name": "Laura", "feel": "Lively and a little quirky."},
+        {"id": "QtY3JBOUKEB5xzrRfOKc", "name": "Maisie", "feel": "Warm, friendly and casual.", "lib": true},
+        {"id": "g7LVvkPWALzPxOQbF6OE", "name": "Jade", "feel": "Upbeat and natural.", "lib": true},
+        {"id": "OYTbf65OHHFELVut7v2H", "name": "Hope", "feel": "Bright and uplifting.", "lib": true},
+      ],
+    };
+    const SILENCE = "data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
+    const WHY = {
+      key: "ElevenLabs did not accept that key.",
+      scope: "That key is not allowed to make speech. Turn on Text to Speech for it at ElevenLabs.",
+      credits: "The ElevenLabs account is out of credits.",
+      voice: "ElevenLabs could not find that voice.",
+      plan: "That voice needs a paid ElevenLabs plan.",
+      paused: "ElevenLabs has paused free use from this network. It needs a paid plan or another network.",
+      busy: "ElevenLabs is busy right now.",
+      slow: "The natural voice took too long to arrive.",
+      offline: "I could not reach ElevenLabs. Check the connection.",
+      blocked: "The phone did not let the sound play.",
+      error: "The natural voice did not work.",
+    };
+    const micBtn = $("#mic"), toastEl = $("#toast"), toggleBtn = $("#voiceToggle");
+    // iPhones and iPads need extra care: their voice list is unreliable, and listening right after speaking can go deaf
+    const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    const SAY = {
+      keyboard: "Voice typing is not available here. Tap the text box and use the microphone key on your keyboard.",
+      blocked: "I could not use the microphone. Check that it is allowed, or tap the text box and use the microphone key on your keyboard.",
+      miss1: "Sorry, I did not catch that. Tap the microphone and try again.",
+      miss2: "I still did not get it. You can type it, or tap one of the suggestions.",
+      miss2key: "I still did not get it. Tap the text box and use the microphone key on your keyboard.",
+      nomic: "I could not reach the microphone just now. Please try again.",
+      offline: "Voice needs the internet right now. Please type instead.",
+      oops: "Voice stopped working for a moment. Please try again, or type instead.",
+      answer: "Tap the microphone to answer.",
+      first: "Your browser's speech service turns your voice into text. This prototype does not save it. Please do not say real health details.",
+      aloud: "I will read answers out loud when you talk to me. Tap the speaker at the top to turn that off.",
+      aloudAll: "I am reading answers out loud. Tap the speaker at the top to turn that off.",
+      silent: "No sound? Check the silent switch on the side of your phone.",
+      volume: "No sound? Turn up the volume on your phone.",
+    };
+
+    let rec = null;                 // the speech recognizer while it is listening
+    let listening = false, speaking = false, started = false;
+    let heard = "";                 // the words so far
+    let cancelled = false, failed = false, auto = false;
+    let stopped = false;            // it was told to stop: words that arrive late are ignored
+    let quietTimer = 0, deafTimer = 0, capTimer = 0, endTimer = 0, startTimer = 0, toastTimer = 0, speakTimer = 0, gapTimer = 0;
+    let voiceMode = false;          // true after the member speaks, false after they type
+    let autoOk = !apple;            // listening by itself after a spoken question. Off on iPhone until proven on a device
+    let autoMisses = 0;             // times it listened by itself and heard nothing
+    let misses = 0;                 // times in a row the member tapped the mic and nothing was heard
+    let refused = false;            // the browser said speech recognition is not allowed here at all
+    let primed = false, current = null;
+    let wantListen = false;         // it finished speaking a question while the card was still being built
+    let spokeEnd = 0;               // when it last stopped talking
+    let repliesOn = true, noted = false, toldAloud = false, toldSilent = false;
+    const recall = (key) => { try { return localStorage.getItem(key); } catch (err) { return null; } };
+    const remember = (key, value) => { try { localStorage.setItem(key, value); } catch (err) { /* private mode */ } };
+    const forget = (key) => { try { localStorage.removeItem(key); } catch (err) { /* private mode */ } };
+    let natKey = recall("ma-eleven-key") || "", natVoice = recall("ma-eleven-voice") || "";
+    let natStyle = recall("ma-eleven-style") === "quick" ? "quick" : "rich";     // rich: the newest model, about three seconds. quick: about a second
+    const turnedDown = new Set();   // models ElevenLabs said no to on this visit. They are not asked again
+    const player = typeof Audio === "function" ? new Audio() : null;      // one player, kept for good: phones only trust a player that a tap has touched
+    let gentle = true;              // how the player is made ready during a tap (see ready())
+    let natOff = false, natMisses = 0, natWhy = "";      // the natural voice failed: use the phone's voice until the setting is changed
+    let cutAt = -1000;              // when the phone's voice was last cut short to make room for the natural voice
+    let queued = "";                // a note that waits until the privacy note has been read
+    const clips = new Map();        // sentences already turned into sound, so a repeat costs nothing
+    let clipsKey = "";
+    let toldVolume = recall("ma-voice-volume") === "1";
+    const naturalOn = () => !!(player && natKey && natVoice && !natOff);
+    // When answers are read aloud. Normally only after the member asks out loud, so typing in public stays quiet.
+    // "Always" is a choice in the Voice card. It is also the default where the browser cannot listen and a natural
+    // voice was set up, because there the voice could otherwise never be heard.
+    let aloudPref = recall("ma-voice-always");      // "1" always, "0" only after talking, null: not chosen
+    let talked = false;             // the latest question was asked out loud
+    const canHear = () => !!Recognition && !refused;
+    const always = () => aloudPref === "1" || (aloudPref !== "0" && !canHear() && !!(natKey && natVoice));
+    voiceMode = always();
+    if (voiceMode) app.classList.add("has-voice");
+    repliesOn = recall("ma-spoken-replies") !== "off";
+    noted = recall("ma-voice-note") === "1";
+    toldAloud = recall("ma-voice-aloud") === "1";
+    toldSilent = recall("ma-voice-silent") === "1";
+
+    function toast(text, ms = 6500) {
+      clearTimeout(toastTimer);
+      toastEl.textContent = text;
+      toastEl.hidden = false;
+      sizeLastTurn();                                        // the note makes the dock taller: keep the last sentence above it
+      const last = flow.lastElementChild && flow.lastElementChild.lastElementChild;
+      if (last && last.classList.contains("say")) keepInView(last, last);
+      toastTimer = setTimeout(() => {
+        const note = queued;
+        clearToast();
+        if (note) { toast(note, 8000); return; }      // a note that waited for the privacy note to be read
+        // a first-use note was in the way when it asked: now say how to answer
+        if ((text === SAY.first || text === SAY.aloud || text === SAY.silent) && bar.classList.contains("wants-answer")) toast(SAY.answer, 5000);
+      }, ms);
+    }
+    function clearToast() { clearTimeout(toastTimer); queued = ""; toastEl.hidden = true; toastEl.textContent = ""; }
+    // it asked something and will not listen by itself: the mic pulses and a short note says what to do
+    function invite() {
+      bar.classList.add("wants-answer");
+      if (toastEl.hidden) toast(SAY.answer, 5000);
+    }
+
+    function showControls() {
+      toggleBtn.setAttribute("aria-pressed", String(repliesOn));
+      toggleBtn.setAttribute("aria-label", repliesOn ? "Spoken replies are on" : "Spoken replies are off");
+      micBtn.setAttribute("aria-pressed", String(listening));
+      micBtn.setAttribute("aria-label", listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk instead of typing");
+    }
+
+    // when the browser will not listen, the keyboard's own microphone key still types into the box
+    function useKeyboard(message) {
+      toast(message, 9000);
+      input.focus();
+    }
+
+    /* ---- listening ---- */
+
+    function setListening(on) {
+      listening = on;
+      bar.classList.toggle("is-listening", on);
+      if (on) bar.classList.remove("wants-answer");
+      if (!on) bar.classList.remove("is-hearing");
+      if (on) { input.placeholder = started ? "Listening..." : "One moment..."; ringWake(); ringPace(2); }
+      else { input.placeholder = activeDraft && activeDraft.set ? "Any changes?" : "Ask Carely"; ringPace(1); ringSleep(); }
+      face.voice(on ? "listening" : speaking ? "talking" : "");
+      showControls();
+      syncBar();
+    }
+
+    function clearTimers() { [quietTimer, deafTimer, capTimer, endTimer, startTimer, gapTimer].forEach(clearTimeout); }
+
+    function listen(byItself = false) {
+      if (listening || busy) return;
+      hush();
+      if (!Recognition || refused) {
+        if (!byItself) useKeyboard(SAY.keyboard);
+        return;
+      }
+      prime();
+      heard = ""; cancelled = false; stopped = false; failed = false; started = false; auto = byItself;
+      try {
+        rec = new Recognition();              // a fresh one every time. Reusing one is unreliable on phones
+        rec.lang = "en-US";
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.maxAlternatives = 1;
+        rec.onstart = onStart;
+        rec.onresult = onResult;
+        rec.onerror = onError;
+        rec.onend = onEnd;
+        rec.start();
+      } catch (err) {
+        rec = null;
+        if (byItself) autoOk = false; else useKeyboard(SAY.blocked);
+        return;
+      }
+      setListening(true);
+      if (!byItself && !noted) { noted = true; remember("ma-voice-note", "1"); toast(SAY.first, 9000); }
+      else if (!byItself) clearToast();      // a tap clears old notes. Listening by itself leaves them to be read
+      clearTimers();
+      // the phone may first ask for permission. Give that 20 seconds before giving up
+      startTimer = setTimeout(() => { if (listening && !started) finish(); }, 20000);
+      capTimer = setTimeout(() => { if (listening) finish(); }, 45000);               // never keep the mic open for long
+    }
+
+    // the microphone is really open now (any permission box has been answered)
+    function onStart() {
+      if (!rec || started) return;
+      started = true;
+      clearTimeout(startTimer);
+      input.placeholder = "Listening...";
+      clearTimeout(deafTimer);
+      deafTimer = setTimeout(() => { if (listening && !heard) finish(); }, auto ? 6000 : 8000);   // nothing heard: stop politely
+    }
+
+    function onResult(e) {
+      if (stopped) return;                                   // already stopped: late words must not change the box
+      if (performance.now() - spokeEnd < 400) return;        // too soon after it spoke: it may be hearing itself
+      if (!started) onStart();
+      let text = "";
+      for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+      text = text.replace(/\s+/g, " ").trim();
+      if (!text) return;
+      heard = text;                          // keep the latest words. Some phones never mark them as final
+      input.value = text;                    // what it hears is shown as it arrives
+      syncBar();
+      input.scrollLeft = input.scrollWidth;
+      bar.classList.add("is-hearing");
+      face.heard();
+      clearTimeout(deafTimer);
+      clearTimeout(quietTimer);
+      // Two seconds of quiet means the member is done. No rush.
+      // Safety words only wait for the end of the sentence, so "is the emergency room covered" is still heard in full.
+      quietTimer = setTimeout(finish, isUrgent(text) ? 600 : 2000);
+    }
+
+    function onError(e) {
+      const code = e && e.error;
+      if (code === "aborted" || cancelled) return;            // phones also report plain silence as "aborted"
+      failed = true;
+      if (code === "service-not-allowed") {
+        refused = true;                                       // it will not work in this app or with these settings
+        if (always()) { voiceMode = true; app.classList.add("has-voice"); }
+        if (!auto) useKeyboard(SAY.keyboard); else autoOk = false;
+      } else if (code === "not-allowed") {
+        if (auto) autoOk = false; else useKeyboard(SAY.blocked);
+      } else if (code === "no-speech") { failed = false; }    // handled as a miss when it ends
+      else if (code === "audio-capture") toast(SAY.nomic);
+      else if (code === "network") toast(SAY.offline);
+      else if (!auto) toast(SAY.oops);
+    }
+
+    // stop listening and use what was heard
+    function finish() {
+      clearTimers();
+      if (!rec) return;
+      try { rec.stop(); } catch (err) { /* already stopped */ }
+      endTimer = setTimeout(onEnd, 1200);    // some phones never report the end, so make sure it ends
+    }
+
+    function onEnd() {
+      if (!rec) return;                      // already handled
+      clearTimers();
+      rec.onstart = rec.onresult = rec.onerror = rec.onend = null;
+      rec = null;
+      const text = heard;
+      heard = "";
+      if (input.value.trim() === text) input.value = "";      // only clear the heard words, never what the member typed
+      syncBar();
+      syncChips();
+      setListening(false);
+      if (cancelled) return;
+      if (text) {
+        voiceMode = true; talked = true;
+        autoMisses = 0; misses = 0;
+        app.classList.add("has-voice");
+        showControls();
+        if (toastEl.textContent !== SAY.first) clearToast();     // the privacy note stays up for its full time
+        // if another answer is still arriving, wait for it. Heard words are never dropped
+        let tries = 0;
+        const send = () => { if (busy && tries++ < 120) setTimeout(send, 150); else ask(text, "voice"); };
+        send();
+        return;
+      }
+      if (failed) return;                    // a message is already showing
+      if (auto) { autoMisses++; bar.classList.add("wants-answer"); toast(SAY.answer, 5000); return; }
+      misses++;
+      if (misses >= 2) {                     // two misses in a row: offer the other ways, do not keep asking
+        if (apple) useKeyboard(SAY.miss2key); else toast(SAY.miss2, 8000);
+      } else toast(SAY.miss1);
+    }
+
+    // stop without sending anything
+    function stopListening() {
+      if (!rec) return;
+      stopped = true;
+      cancelled = !isUrgent(heard);          // safety words are never thrown away
+      clearTimers();
+      try { rec.abort(); } catch (err) { /* already stopped */ }
+      endTimer = setTimeout(onEnd, 400);
+    }
+
+    /* ---- speaking ---- */
+
+    // phones only let a page speak after a tap, so the first tap on the microphone unlocks it with a silent word
+    function prime() {
+      if (!primed && canSpeak) {
+        primed = true;
+        try { const u = new SpeechSynthesisUtterance(" "); u.volume = 0; u.lang = "en-US"; synth.speak(u); } catch (err) { /* no voices */ }
+      }
+      if (naturalOn()) ready(false);
+    }
+    // The natural voice arrives a moment after the tap, and phones only let a tap start sound.
+    // So during each tap the player is touched, which is what lets it play by itself a moment later.
+    // On a microphone tap this is done the quiet way (load), so no sound runs while the microphone opens.
+    // If a phone ever refuses to play after that, the surer way is used from then on: a blink of silence.
+    function ready(sure) {
+      if (!player || !player.paused) return;
+      try {
+        if (sure || !gentle) { player.src = SILENCE; const p = player.play(); if (p && p.catch) p.catch(() => {}); }
+        else player.load();
+      } catch (err) { /* the answer falls back to the phone's voice */ }
+    }
+
+    // On iPhone the system picks the voice for the language (its list can hold joke voices and loads late).
+    // Elsewhere prefer a few known good voices, then any voice that lives on the device. Never just "the first one".
+    function pickVoice() {
+      if (apple) return null;
+      let all = [];
+      try { all = synth.getVoices() || []; } catch (err) { return null; }
+      const pool = all.filter((v) => /^en[-_]US/i.test(v.lang));
+      for (const name of ["Samantha", "Google US English", "Aria", "Jenny"]) {
+        const hit = pool.find((v) => v.name.indexOf(name) >= 0);
+        if (hit) return hit;
+      }
+      return pool.find((v) => v.localService) || null;
+    }
+
+    // the voice reads plain words better than short forms
+    const LONG = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday",
+      Jan: "January", Feb: "February", Mar: "March", Apr: "April", Jun: "June", Jul: "July", Aug: "August", Sep: "September", Oct: "October", Nov: "November", Dec: "December" };
+    function toSpeech(text) {
+      return String(text)
+        .replace(/\bDr\.\s/g, "Doctor ")
+        .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b(?!\w)/g, (m) => LONG[m])
+        .replace(/\s·\s/g, ", ")
+        .replace(/[\[\]<>*_#`]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function setSpeaking(on, waiting) {
+      speaking = on;
+      bar.classList.toggle("is-speaking", on);
+      if (on) { bar.classList.remove("wants-answer"); ringWake(); } else ringSleep();
+      if (!listening) face.voice(on && !waiting ? "talking" : "");
+      showControls();
+      syncBar();
+    }
+
+    // reading aloud is a nice extra. If it ever fails, the answer on screen must not be affected
+    function say(text, urgent) {
+      try { return sayNow(text, urgent); }
+      catch (err) { quiet(); current = null; if (speaking) setSpeaking(false); return false; }
+    }
+
+    function sayNow(text, urgent) {
+      if (listening) stopListening();        // an answer is arriving: never listen through it, spoken or not
+      if (!voiceMode || !repliesOn || !text || !(canSpeak || naturalOn())) return false;
+      const fine = naturalOn() && !(urgent && canSpeak);      // "call 911" must not wait for a sound to arrive
+      const job = begin(() => { wantListen = true; listenAgain(); }, fine);
+      if (fine) {
+        playNatural(job, text, natKey, natVoice, natStyle).then((why) => {
+          if (current !== job) return;       // it was stopped or replaced
+          if (!why) { natMisses = 0; return; }
+          trouble(why);
+          playPhone(job, text);              // the answer is still read aloud, by the phone's own voice
+        });
+      } else playPhone(job, text);
+      if (!toastEl.hidden && toastEl.textContent === SAY.first) { /* let the privacy note be read first */ }
+      else if (!toldAloud) { toldAloud = true; remember("ma-voice-aloud", "1"); toast(talked ? SAY.aloud : SAY.aloudAll, 8000); }
+      else if (apple && !fine && !toldSilent) { toldSilent = true; remember("ma-voice-silent", "1"); toast(SAY.silent, 7000); }
+      else if (apple && fine && !toldVolume) { toldVolume = true; remember("ma-voice-volume", "1"); toast(SAY.volume, 7000); }     // the silent switch does not mute this voice
+      return true;
+    }
+
+    // One thing is said at a time. A job is the sentence being said now. When it ends, `after` runs.
+    // `waiting` means the sound is still on its way, so the face does not move its "mouth" yet.
+    function begin(after, waiting) {
+      quiet();
+      const job = { after, stop: null, u: null };
+      job.done = () => {
+        if (current !== job) return;
+        current = null;
+        clearTimeout(speakTimer);
+        if (player) player.onended = player.onerror = player.onpause = player.ondurationchange = null;
+        if (job.clip) rest();
+        spokeEnd = performance.now();
+        setSpeaking(false);
+        if (job.after) job.after();
+      };
+      current = job;
+      wantListen = false;
+      setSpeaking(true, waiting);
+      return job;
+    }
+
+    // After a sentence the player is left holding only silence. So a play button outside the page
+    // (the lock screen, headphones) can never replay an answer, and nothing keeps playing past its end.
+    function rest() {
+      try { if (!player.paused) player.pause(); player.src = SILENCE; } catch (err) { /* nothing to rest */ }
+    }
+
+    // stop whatever sound is on its way or playing. The talking state is left to the caller
+    function quiet() {
+      clearTimeout(speakTimer);
+      clearTimeout(gapTimer);
+      if (current) face.think(false, current);
+      if (current && current.stop) { try { current.stop.abort(); } catch (err) { /* already over */ } }
+      if (player) {
+        player.onended = player.onerror = player.onpause = player.ondurationchange = null;
+        try { if (!player.paused && player.src !== SILENCE) player.pause(); } catch (err) { /* nothing playing */ }     // the blink of silence is left to finish
+        if (current && current.clip) { current.clip = false; rest(); }
+      }
+    }
+
+    function playPhone(job, text) {
+      if (!canSpeak) { job.done(); return; }
+      if (!listening) face.voice("talking");
+      const u = new SpeechSynthesisUtterance(toSpeech(text));
+      u.lang = "en-US";
+      u.rate = 1.02;
+      const v = pickVoice();
+      if (v) { try { u.voice = v; } catch (err) { /* keep the default voice */ } }
+      u.onend = job.done;
+      u.onerror = job.done;
+      job.u = u;                             // keep hold of it so the browser does not drop it mid sentence
+      clearTimeout(speakTimer);
+      speakTimer = setTimeout(job.done, 5000 + text.length * 110);     // in case the end is never reported
+      // stopping and starting in the same breath can swallow the new sentence on Safari, so leave a short gap
+      let gap = performance.now() - cutAt < 120 ? 120 : 0;
+      try { if (synth.speaking || synth.pending) { synth.cancel(); gap = 120; } } catch (err) { /* nothing to stop */ }
+      const go = () => { if (current === job) { try { synth.speak(u); } catch (err) { job.done(); } } };
+      if (gap) setTimeout(go, gap); else go();
+    }
+
+    // Ask ElevenLabs for the sentence and play it. Resolves to "" when it is playing (or was stopped),
+    // or to a short reason when it could not play, so the caller can fall back to the phone's voice.
+    async function playNatural(job, text, key, voiceId, style) {
+      try { if (canSpeak && (synth.speaking || synth.pending)) { synth.cancel(); cutAt = performance.now(); } } catch (err) { /* nothing to stop */ }     // one voice at a time
+      face.think(true, job);                 // the face thinks until the sound is really there
+      try { return await fetchAndPlay(job, text, key, voiceId, style); }
+      finally { face.think(false, job); }
+    }
+    async function fetchAndPlay(job, text, key, voiceId, style) {
+      if (key !== clipsKey) { clips.forEach((url) => URL.revokeObjectURL(url)); clips.clear(); clipsKey = key; }
+      const id = style + "\n" + voiceId + "\n" + text;
+      let url = clips.get(id);
+      if (!url) {
+        const stop = new AbortController();
+        let slow = false;
+        job.stop = stop;
+        const limit = setTimeout(() => { slow = true; stop.abort(); }, NATURAL.styles[style].wait);      // an answer must never hang on the network
+        let got;
+        try { got = await fetchClip(toSpeech(text).slice(0, 900), key, voiceId, style, stop.signal); }
+        catch (err) { got = { why: slow ? "slow" : "offline" }; }
+        clearTimeout(limit);
+        job.stop = null;
+        if (current !== job) return "";      // it was told to stop while the sound was on its way
+        if (got.why) return got.why;
+        url = URL.createObjectURL(new Blob([got.blob], { type: "audio/mpeg" }));
+        clips.set(id, url);
+        if (clips.size > 24) { const first = clips.keys().next().value; URL.revokeObjectURL(clips.get(first)); clips.delete(first); }
+      }
+      const started = await new Promise((resolve) => {
+        player.onended = job.done;
+        player.onerror = () => resolve(false);
+        try {
+          player.src = url;
+          const p = player.play();           // right away: waiting for the sound to load first can lose the tap's permission
+          if (p && p.then) p.then(() => resolve(true), () => resolve(false)); else resolve(true);
+        } catch (err) { resolve(false); }
+        setTimeout(() => resolve(false), 4000);
+      });
+      if (current !== job) return "";
+      if (!started) {
+        player.onended = player.onerror = player.onpause = player.ondurationchange = null;
+        try { player.pause(); } catch (err) { /* not playing */ }
+        gentle = false;                      // from now on a tap makes the player ready the surer way
+        return "blocked";
+      }
+      if (!listening) face.voice("talking");
+      job.clip = true;
+      player.onerror = job.done;
+      // paused from outside the page (a call, the lock screen): the sentence is over, and the microphone does not open by itself after it
+      player.onpause = () => { if (!player.ended) { job.after = null; job.done(); } };
+      // in case the end is never reported. The length is a guess until the browser knows the real one
+      const watch = () => {
+        const secs = isFinite(player.duration) && player.duration > 0 ? player.duration - player.currentTime : 3 + text.length * 0.09;
+        clearTimeout(speakTimer);
+        speakTimer = setTimeout(job.done, secs * 1000 + 2500);
+      };
+      watch();
+      player.ondurationchange = () => { if (current === job) watch(); };
+      return "";
+    }
+
+    // one request per sentence. A model that ElevenLabs refuses is skipped for the rest of the visit
+    async function fetchClip(text, key, voiceId, style, signal) {
+      const all = NATURAL.styles[style].models, open = all.filter((x) => !turnedDown.has(x));
+      let why = "error";
+      for (const model of open.length ? open : all) {
+        const res = await fetch(NATURAL.api + "v1/text-to-speech/" + encodeURIComponent(voiceId) + "?output_format=" + NATURAL.format, {
+          method: "POST",
+          signal,
+          headers: { "xi-api-key": key, "Content-Type": "application/json", Accept: "audio/mpeg" },
+          body: JSON.stringify({ text, model_id: model, voice_settings: NATURAL.settings }),
+          referrerPolicy: "no-referrer",
+          credentials: "omit",
+          cache: "no-store",
+          redirect: "error",                 // the key must never follow a redirect to another address
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          return blob.size ? { blob } : { why: "error" };
+        }
+        const no = await whyNot(res);
+        why = no.why;
+        if (!no.model) break;                // only a refused model is worth another try
+        turnedDown.add(model);
+      }
+      return { why };
+    }
+
+    // read ElevenLabs' answer when it says no, and turn it into one of a few plain reasons
+    async function whyNot(res) {
+      let code = "";
+      try {
+        const body = await res.json(), d = body && body.detail;
+        code = typeof d === "string" ? d : Array.isArray(d) ? d.map((x) => (x && (x.msg || x.type)) || "").join(" ") : d ? [d.code, d.status, d.type, d.message].filter(Boolean).join(" ") : "";
+      } catch (err) { /* no details */ }
+      code = code.slice(0, 600);             // a very long answer must not hold up the page
+      const s = res.status, vague = s === 400 || s === 422;
+      let why = "error";
+      if (/quota|credit/i.test(code)) why = "credits";
+      else if (/unusual.activity/i.test(code)) why = "paused";
+      else if (/voice_not_found|voice.*(not found|does not exist)/i.test(code) || (s === 404 && !/model/i.test(code)) || (vague && /voice/i.test(code) && !/model/i.test(code))) why = "voice";
+      else if (/paid_plan|payment_required|free_users|subscription|upgrade|library voice/i.test(code) || s === 402) why = "plan";
+      else if (/missing_permission|permission/i.test(code)) why = "scope";
+      else if (s === 401 || /invalid_api_key|missing_api_key/i.test(code)) why = "key";
+      else if (s === 403) why = "scope";
+      else if (s === 408 || s === 409 || s === 425 || s === 429 || s >= 500 || /busy|too_many|rate_limit|concurrent/i.test(code)) why = "busy";
+      // a refused model is worth one more try with the next model. So is a plain "bad request" that does not say why
+      return { why, model: (/model/i.test(code) && why !== "key" && why !== "credits" && why !== "paused") || (vague && why === "error") };
+    }
+
+    // the natural voice failed during a real answer: say why once, and stop trying when it cannot get better by itself
+    function trouble(why) {
+      natMisses++;
+      const lasting = why === "key" || why === "scope" || why === "credits" || why === "voice" || why === "plan" || why === "paused";
+      if (lasting || natMisses >= 3) { natOff = true; natWhy = why; }
+      const note = WHY[why] + " I am using the phone's voice" + (natOff ? '. Ask for "voice settings" to fix it.' : " for this answer.");
+      if (!toastEl.hidden && toastEl.textContent === SAY.first) queued = note;      // the privacy note is read first, for its full time
+      else toast(note, 8000);
+    }
+
+    function hush() {
+      quiet();
+      current = null;
+      wantListen = false;
+      if (canSpeak) { try { if (synth.speaking || synth.pending) synth.cancel(); } catch (err) { /* nothing to stop */ } }
+      if (speaking) { spokeEnd = performance.now(); setSpeaking(false); }
+    }
+
+    // a voice the account copied from the ElevenLabs voice library. Those need a paid plan when used with a key
+    const shared = (v) => !!(v.sharing && typeof v.sharing === "object" && v.is_owner !== true);
+    // a voice from the account's list, in the few words the Voice card shows
+    function plain(v) {
+      const parts = String(v.name).trim().split(/\s+[-–|:]\s+/), L = v.labels && typeof v.labels === "object" ? v.labels : {};
+      const str = (x) => (typeof x === "string" ? x : "");
+      const feel = parts.slice(1).join(", ") || str(L.descriptive) || str(L.description);
+      const said = str(L.accent).replace(/[-_]/g, " "), accent = said.charAt(0).toUpperCase() + said.slice(1);
+      const words = [feel, accent && feel.toLowerCase().indexOf(accent.toLowerCase()) < 0 ? accent + " accent" : ""].filter(Boolean).join(". ");
+      const line = words.replace(/[.\s]+$/, "").slice(0, 90);
+      return { id: String(v.voice_id), name: parts[0].slice(0, 22), feel: line ? line.charAt(0).toUpperCase() + line.slice(1) + "." : "", lib: shared(v) };
+    }
+
+    // The Voice card: what is set now, the account's voices, a sample to listen to, and saving or removing the setting.
+    const natural = {
+      state: () => ({ hasKey: !!natKey, voice: natKey ? natVoice : "", style: natStyle, voices: NATURAL.voices,
+        always: always(), hears: canHear(), off: natOff ? WHY[natWhy] || WHY.error : "" }),
+      // the voices in the ElevenLabs account that the key belongs to, or null when they cannot be read
+      async list(key) {
+        for (const path of ["v2/voices?page_size=100", "v1/voices"]) {
+          try {
+            const stop = new AbortController(), limit = setTimeout(() => stop.abort(), 8000);
+            const res = await fetch(NATURAL.api + path, { headers: { "xi-api-key": key || natKey }, signal: stop.signal, referrerPolicy: "no-referrer", credentials: "omit", cache: "no-store", redirect: "error" });
+            const body = res.ok ? await res.json() : null;
+            clearTimeout(limit);
+            const all = body && Array.isArray(body.voices) ? body.voices.filter((v) => v && typeof v.voice_id === "string" && /^[A-Za-z0-9]{8,40}$/.test(v.voice_id) && typeof v.name === "string" && v.name.trim() && !v.is_legacy) : [];
+            const words = (v) => String(v.name) + " " + (v.labels && typeof v.labels === "object" ? Object.values(v.labels).join(" ") : "");
+            // voices every plan can use come first, then ones copied from the voice library. In each group, warm and bright voices first
+            const rank = (v) => (shared(v) ? 2 : 0) + (/warm|bright|friendly|upbeat|playful|cheer|sunny/i.test(words(v)) ? 0 : 1);
+            if (all.length) return all.sort((a, b) => rank(a) - rank(b)).slice(0, 30).map(plain);
+          } catch (err) { /* try the older address, then give up quietly */ }
+        }
+        return null;
+      },
+      // Plays one sentence so the voice can be judged. Called from a tap, which is what lets a phone play sound.
+      async sample(key, voiceId, style) {
+        if (listening) stopListening();
+        if (!voiceId) {
+          if (!canSpeak) return { ok: false, why: "This browser has no voice of its own." };
+          prime();
+          playPhone(begin(null), NATURAL.sample);
+          return { ok: true };
+        }
+        if (!player) return { ok: false, why: "This browser cannot play the natural voice." };
+        quiet();
+        ready(true);
+        const job = begin(null, true);
+        const why = await playNatural(job, NATURAL.sample, key || natKey, voiceId, style === "quick" ? "quick" : "rich");
+        if (current !== job) return { ok: false, why: "It was stopped before it played." };      // stopped on the way: nothing was checked
+        if (why) job.done();
+        if (!why && natKey && (key || natKey) === natKey && voiceId === natVoice) { natOff = false; natMisses = 0; }      // the saved voice works again
+        return why ? { ok: false, why: WHY[why] } : { ok: true };
+      },
+      save(key, voiceId, style, aloud) {
+        if (aloud === true || aloud === false) { aloudPref = aloud ? "1" : "0"; remember("ma-voice-always", aloudPref); }
+        if (key) { natKey = key; remember("ma-eleven-key", key); }
+        if (style) { natStyle = style === "quick" ? "quick" : "rich"; remember("ma-eleven-style", natStyle); }
+        natVoice = voiceId || "";
+        if (natVoice) remember("ma-eleven-voice", natVoice); else forget("ma-eleven-voice");
+        natOff = false; natMisses = 0;
+        if (always()) { voiceMode = true; app.classList.add("has-voice"); }
+      },
+      forget() {
+        hush();                              // stop a sample or an answer that is still on its way with this key
+        natKey = ""; natVoice = ""; natOff = false; turnedDown.clear();
+        forget("ma-eleven-key"); forget("ma-eleven-voice");
+        clips.forEach((url) => URL.revokeObjectURL(url)); clips.clear(); clipsKey = "";
+      },
+    };
+
+    // After it asks something out loud about a draft, the member will want to answer.
+    // Where the browser allows it, listen once by itself after a short gap. Otherwise the mic pulses to invite a tap.
+    function listenAgain() {
+      if (!wantListen || speaking || busy || listening) return;      // if the card is still being built, afterTurn() tries again
+      wantListen = false;
+      if (!voiceMode || !talked || document.hidden) return;
+      if (!activeDraft || !activeDraft.open) return;
+      if (!autoOk || autoMisses > 0) { invite(); return; }
+      clearTimeout(gapTimer);
+      gapTimer = setTimeout(() => { if (!speaking && !busy && !listening && activeDraft && activeDraft.open) listen(true); }, 350);
+    }
+
+    /* ---- controls ---- */
+
+    // click, not touch start: phones only allow the microphone from a finished tap
+    micBtn.addEventListener("click", () => {
+      if (listening) { finish(); return; }
+      if (speaking && (busy || !Recognition || refused)) { hush(); return; }     // cannot listen right now: the button just stops the talking
+      autoMisses = 0;
+      listen(false);                          // this also stops anything being read aloud
+    });
+    toggleBtn.addEventListener("click", () => {
+      repliesOn = !repliesOn;
+      remember("ma-spoken-replies", repliesOn ? "on" : "off");
+      if (!repliesOn) hush();
+      showControls();
+      toast(repliesOn ? "Spoken replies are on." : "Spoken replies are off. Answers are still shown.", 3500);
+    });
+    input.addEventListener("input", () => { stopListening(); hush(); });     // typing closes the microphone and stops anything being read aloud
+    const leave = () => { stopListening(); hush(); };
+    document.addEventListener("visibilitychange", () => { if (document.hidden) leave(); });
+    window.addEventListener("pagehide", leave);
+    if (canSpeak) { try { synth.getVoices(); } catch (err) { /* voices load later */ } }   // ask early so the list is ready for the first reply
+    showControls();
+
+    return {
+      say,
+      hush,
+      // a typed question: answered silently, unless answers are always read aloud. The tap or key press is what lets a phone play sound
+      typed() { talked = false; voiceMode = always(); bar.classList.remove("wants-answer"); hush(); if (voiceMode) prime(); },
+      cancel() { bar.classList.remove("wants-answer"); stopListening(); hush(); if (always()) { voiceMode = true; prime(); } },
+      afterTurn: listenAgain,                    // called when an answer has finished arriving
+      busy: () => listening || speaking,
+      // Enter while it listens: send what was heard now, by the voice rules
+      sendHeard() { if (!listening || stopped || !heard) return false; finish(); return true; },
+      natural,
+      // true when the natural voice will read the next answer. It takes a moment to arrive, so it is asked for early
+      early: () => voiceMode && repliesOn && naturalOn(),
+      // what to say after a draft, in words that match what the microphone will do next
+      hint: () => (!talked ? "" : autoOk && autoMisses === 0 ? " Tell me what to change, or say confirm." : " Tap the microphone to change something or to confirm."),
+    };
+  })();
+
   /* ---- start ---- */
   // the app manifest only works from a web address, so skip it when this is opened as a plain file
   if (location.protocol.indexOf("http") === 0) {
@@ -2147,6 +3467,7 @@
 
   setChips(HOME_CHIPS);
   onResize();
+  syncGlass();
   face.start();
 
   // small hook so this can be wired to a real model later

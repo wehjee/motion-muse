@@ -4,7 +4,8 @@
   A health plan member assistant where the answer is the interface.
   The member types what they need. The assistant replies with a short
   sentence and a generated card they can check, change and confirm.
-  One file, no build step. All data is made up.
+  One page and one library file (vendor/), no build step. All data is made up.
+  A live conversation (the microphone button) goes through ElevenLabs.
   No network requests, unless a natural voice is switched on in the Voice card
   (then each spoken answer is sent to ElevenLabs to be turned into speech).
 
@@ -47,6 +48,9 @@
 <link rel="apple-touch-icon" href="icon-180.png" />
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
 <title>Carely</title>
+<!-- The ElevenLabs browser library (MIT licence, see vendor/). It runs the live conversation.
+     It is loaded with the page, not at the first tap, because phones only let sound and the microphone start from a tap. -->
+<script src="vendor/elevenlabs-client-1.37.1.js" defer></script>
 <style>
   :root {
     --page: #ffffff;
@@ -891,6 +895,19 @@
   .bar.is-hearing .mic::after { animation-duration: 0.75s; }
   /* it asked something out loud and is waiting for a tap on the mic */
   .bar.wants-answer:not(.is-listening) .mic::after { box-shadow: 0 0 0 2px var(--green); animation: mic-ring 2.4s ease-out infinite; }
+  /* a live conversation: the line is open. The mic turns into the button that ends it, green with slow rings */
+  .bar.is-live .mic, .bar.is-calling .mic {
+    color: #fff;
+    background: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
+    box-shadow: inset 0 0 0 var(--hair) rgba(255, 255, 255, 0.22), inset 0.75px 1px 0.5px rgba(214, 255, 230, 0.6), 0 5px 10px -5px rgba(14, 122, 62, 0.75);
+  }
+  .bar.is-live .mic .wave, .bar.is-calling .mic .wave { display: none; }
+  .bar.is-live .mic .stop, .bar.is-calling .mic .stop { display: block; }
+  .bar.is-live .mic::after { box-shadow: 0 0 0 2px rgba(58, 203, 120, 0.55); animation: mic-ring 2.2s ease-out infinite; }
+  .bar.is-live.is-hearing .mic::after { animation-duration: 0.75s; }      /* quick rings while the member is talking */
+  .bar.is-calling .mic::after { box-shadow: 0 0 0 2px rgba(58, 203, 120, 0.45); animation: mic-ring 1s ease-out infinite; }
+  /* the green light in the glass grows with Carely's voice, so sound can be seen even when it cannot be heard */
+  .bar.is-live .bar__glow { opacity: calc(0.3 + var(--live-out, 0) * 0.7); transition: opacity 0.12s linear; }
   /* while it talks, the mic is a stop button */
   .bar.is-speaking:not(.is-listening) .mic .wave { display: none; }
   .bar.is-speaking:not(.is-listening) .mic .stop { display: block; }
@@ -1043,6 +1060,7 @@
     .ask, .say .w, .mod, .mod.is-built .part, .mod.is-built .row.flash, .chip, .done__check path, .toast { animation: none; }
     .bar.is-listening .mic::after { animation: none; opacity: 0.8; }
     .bar.wants-answer:not(.is-listening) .mic::after { animation: none; opacity: 1; }
+    .bar.is-live .mic::after, .bar.is-calling .mic::after { animation: none; opacity: 0.8; }
     .bar.is-listening .bar__glow { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
@@ -1833,7 +1851,7 @@
     let list = now.voices;                 // a few ready made voices, until the account's own list arrives
     let picked = now.hasKey ? now.voice : now.voices[0].id;      // "" is the phone's own voice, "other" is a pasted voice ID. The first time, start on the suggested voice
     let style = now.style;                 // "quick" or "rich"
-    let when = now.always ? "always" : "talk";      // when answers are read aloud
+    let when = now.always || !now.hears ? "always" : "talk";      // when answers are read aloud
     let saved = false;
     m.body.innerHTML =
       `<div class="row row--full part"><span class="row__label" id="${n}-vl">Voice</span>
@@ -1849,8 +1867,8 @@
          <span class="note" data-pace aria-live="polite"></span></div>
        <div class="row row--full part" data-row="when"><span class="row__label" id="${n}-wl">Read aloud</span>
          <div class="opts" role="radiogroup" aria-labelledby="${n}-wl">
-           <label class="opt"><input type="radio" name="${n}-w" value="talk"${now.always ? "" : " checked"}${now.hears ? "" : " disabled"} /><span>After I talk</span></label>
-           <label class="opt"><input type="radio" name="${n}-w" value="always"${now.always ? " checked" : ""} /><span>Always</span></label></div>
+           <label class="opt"><input type="radio" name="${n}-w" value="talk"${now.always || !now.hears ? "" : " checked"}${now.hears ? "" : " disabled"} /><span>After I talk</span></label>
+           <label class="opt"><input type="radio" name="${n}-w" value="always"${now.always || !now.hears ? " checked" : ""} /><span>Always</span></label></div>
          <span class="note" data-when aria-live="polite"></span></div>
        <div class="row row--full part" data-row="key"><label class="row__label" for="${n}-key">ElevenLabs key</label>
          <input class="inline-input" id="${n}-key" type="password" maxlength="200" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="done" /></div>
@@ -1929,9 +1947,9 @@
       list = mine.concat(now.voices.filter((v) => v.lib && !mine.some((x) => x.id === v.id)));
       if (picked !== "" && want && find(want)) picked = want;
       else if (picked !== "" && picked !== "other") { idEl.value = picked; picked = "other"; }
-      const at = document.activeElement, keep = voicesEl.contains(at);
+      const at = document.activeElement, keep = voicesEl.contains(at) || at === idEl;
       morph(m.el, () => { drawVoices(); draw(); });
-      if (keep) backToVoices();              // the list was redrawn under the keyboard focus
+      if (keep && (at !== idEl || idRow.hidden)) backToVoices();      // the list was redrawn under the keyboard focus, or the Voice ID box went away
     }
     loadMine("");
 
@@ -2350,6 +2368,7 @@
       draft: (d) => setDraft(d),
       ask: (text) => ask(text),
       say: (text, next, silent) => {
+        if (live.on() && live.cardSaid(text)) { if (next) setChips(next); statusEl.textContent = text; return; }      // Carely says it herself
         if (!silent) voice.say(text);
         speak(turn, text, "say--after");
         const line = turn.lastElementChild;
@@ -2365,6 +2384,7 @@
   async function ask(raw, how) {
     const text = String(raw || "").trim();
     if (!text || busy) return false;
+    if (live.on() && live.send(text)) return true;     // a conversation is on: Carely answers on the line
     const viaVoice = how === "voice";
     if (viaVoice) voice.hush(); else voice.cancel();                       // a new request stops anything being read aloud. A tapped or typed one also closes the microphone
     if (window.matchMedia("(pointer: coarse)").matches) input.blur();     // on phones, put the keyboard away so the card has room
@@ -2420,6 +2440,7 @@
 
   function goHome() {
     if (busy) return;
+    live.stop();
     voice.cancel();
     flow.innerHTML = "";
     setDraft(null);
@@ -2670,6 +2691,7 @@
     if (voice.sendHeard()) return;               // heard words are always sent as voice, never as typed text
     const text = input.value.trim();
     if (!text || busy) return;
+    if (live.on()) { input.value = ""; syncBar(); syncChips(); if (!live.send(text)) ask(text); return; }      // typed during a conversation
     voice.typed();                               // typing means answers are shown, not read aloud
     input.value = "";
     syncBar();
@@ -2687,6 +2709,7 @@
   // Page Up, Page Down and the arrow keys scroll the conversation, even while the text box has focus
   document.addEventListener("keydown", (e) => {
     if (e.key === "Tab") root.classList.add("keys");
+    if (e.key === "Escape" && live.on()) { live.stop(); return; }             // Escape ends a live conversation
     if (e.key === "Escape" && voice.busy()) { voice.cancel(); return; }       // Escape stops listening or speaking
     if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.target !== input && e.target !== document.body) return;
@@ -2729,7 +2752,7 @@
   function ringSleep() {
     clearTimeout(ringRest);
     ringRest = setTimeout(() => {
-      const awake = bar.matches(":focus-within") || ["is-thinking", "is-listening", "is-speaking"].some((c) => bar.classList.contains(c));
+      const awake = bar.matches(":focus-within") || ["is-thinking", "is-listening", "is-speaking", "is-live", "is-calling"].some((c) => bar.classList.contains(c));
       if (!awake) bar.classList.remove("is-lit");
     }, 800);
   }
@@ -2765,6 +2788,7 @@
          microphone key on the keyboard when the browser will not listen
      ========================================================= */
 
+  let live = { ready: () => false, on: () => false, send: () => false, stop() {}, away() {}, cardSaid: () => false, toggle() {} };      // the real one is made in section 8
   const voice = (() => {
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const synth = window.speechSynthesis;
@@ -2897,7 +2921,7 @@
       toggleBtn.setAttribute("aria-pressed", String(repliesOn));
       toggleBtn.setAttribute("aria-label", repliesOn ? "Spoken replies are on" : "Spoken replies are off");
       micBtn.setAttribute("aria-pressed", String(listening));
-      micBtn.setAttribute("aria-label", listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk instead of typing");
+      micBtn.setAttribute("aria-label", live.on() ? "End the conversation" : live.ready() ? "Talk with Carely" : listening ? "Stop listening" : speaking ? "Stop speaking" : "Talk instead of typing");
     }
 
     // when the browser will not listen, the keyboard's own microphone key still types into the box
@@ -2949,7 +2973,7 @@
       }
       setListening(true);
       if (!byItself && !noted) { noted = true; remember("ma-voice-note", "1"); toast(SAY.first, 9000); }
-      else if (!byItself) clearToast();      // a tap clears old notes. Listening by itself leaves them to be read
+      else if (!byItself && !(queued && natOff)) clearToast();      // a tap clears old notes. Not a reason that still waits behind the privacy note and will not be said again
       clearTimers();
       // the phone may first ask for permission. Give that 20 seconds before giving up
       startTimer = setTimeout(() => { if (listening && !started) finish(); }, 20000);
@@ -3113,6 +3137,7 @@
 
     // reading aloud is a nice extra. If it ever fails, the answer on screen must not be affected
     function say(text, urgent) {
+      if (live.on()) return false;           // on the line, Carely's own voice does the talking
       try { return sayNow(text, urgent); }
       catch (err) { quiet(); current = null; if (speaking) setSpeaking(false); return false; }
     }
@@ -3296,6 +3321,7 @@
       const s = res.status, vague = s === 400 || s === 422;
       let why = "error";
       if (/quota|credit/i.test(code)) why = "credits";
+      else if (s === 429 || /concurrent|too_many|rate_limit/i.test(code)) why = "busy";
       else if (/unusual.activity/i.test(code)) why = "paused";
       else if (/voice_not_found|voice.*(not found|does not exist)/i.test(code) || (s === 404 && !/model/i.test(code)) || (vague && /voice/i.test(code) && !/model/i.test(code))) why = "voice";
       else if (/paid_plan|payment_required|free_users|subscription|upgrade|library voice/i.test(code) || s === 402) why = "plan";
@@ -3370,6 +3396,7 @@
         }
         if (!player) return { ok: false, why: "This browser cannot play the natural voice." };
         quiet();
+        if (natOff) { clips.forEach((url) => URL.revokeObjectURL(url)); clips.clear(); }      // switched off: this sample must really ask ElevenLabs
         ready(true);
         const job = begin(null, true);
         const why = await playNatural(job, NATURAL.sample, key || natKey, voiceId, style === "quick" ? "quick" : "rich");
@@ -3386,6 +3413,7 @@
         if (natVoice) remember("ma-eleven-voice", natVoice); else forget("ma-eleven-voice");
         natOff = false; natMisses = 0;
         if (always()) { voiceMode = true; app.classList.add("has-voice"); }
+        else if (!talked) voiceMode = false;      // "After I talk" was chosen and nobody has talked: taps stay quiet too
       },
       forget() {
         hush();                              // stop a sample or an answer that is still on its way with this key
@@ -3411,6 +3439,7 @@
 
     // click, not touch start: phones only allow the microphone from a finished tap
     micBtn.addEventListener("click", () => {
+      if (live.on() || live.ready()) { if (listening) stopListening(); hush(); live.toggle(); return; }       // one tap starts a live conversation, the next one ends it
       if (listening) { finish(); return; }
       if (speaking && (busy || !Recognition || refused)) { hush(); return; }     // cannot listen right now: the button just stops the talking
       autoMisses = 0;
@@ -3424,7 +3453,7 @@
       toast(repliesOn ? "Spoken replies are on." : "Spoken replies are off. Answers are still shown.", 3500);
     });
     input.addEventListener("input", () => { stopListening(); hush(); });     // typing closes the microphone and stops anything being read aloud
-    const leave = () => { stopListening(); hush(); };
+    const leave = () => { live.away(); stopListening(); hush(); };       // the page is hidden: nothing keeps listening or talking
     document.addEventListener("visibilitychange", () => { if (document.hidden) leave(); });
     window.addEventListener("pagehide", leave);
     if (canSpeak) { try { synth.getVoices(); } catch (err) { /* voices load later */ } }   // ask early so the list is ready for the first reply
@@ -3441,12 +3470,396 @@
       // Enter while it listens: send what was heard now, by the voice rules
       sendHeard() { if (!listening || stopped || !heard) return false; finish(); return true; },
       natural,
+      note: (text, ms) => toast(text, ms),       // a short note above the chat bar
+      clearNote: clearToast,
+      labels: showControls,
       // true when the natural voice will read the next answer. It takes a moment to arrive, so it is asked for early
       early: () => voiceMode && repliesOn && naturalOn(),
       // what to say after a draft, in words that match what the microphone will do next
       hint: () => (!talked ? "" : autoOk && autoMisses === 0 ? " Tell me what to change, or say confirm." : " Tap the microphone to change something or to confirm."),
     };
   })();
+
+
+  /* =========================================================
+     8. A LIVE CONVERSATION
+     One tap on the microphone opens a line to Carely, like a phone call. ElevenLabs runs the talking:
+     it hears the member, answers in Carely's voice, and asks this page to show cards through a few "tools".
+     The page stays in charge of the facts and of the safety rules:
+       - every fact Carely says comes from a card this page drew
+       - nothing is booked without a read back and a clear yes, and that is checked here, not by the AI
+       - emergency words put the 911 card on the screen at once
+       - numbers that must not be said (member ID, card numbers) are never given to Carely
+     Only the ID of a public agent is needed. There is no key in the page.
+     Add ?agent=off to the address to switch this off and get the older tap to talk microphone.
+     ========================================================= */
+  const LIVE = { agent: "" };
+
+  live = (() => {
+    let convo = null;               // the open line
+    let state = "off";              // off | starting | on
+    let run = 0;                    // counts attempts, so a late answer from an older one is ignored
+    let turn = null;                // where the next words and cards go
+    let lastLine = null;            // Carely's latest sentence on the screen
+    let heard = "";                 // the member's latest words
+    let said = 0;                   // how many things the member has said or typed
+    let sent = "";                  // what this page last put on the line itself, so its echo is not shown twice
+    let collect = null;             // while a tool confirms a draft: what the card says about it
+    let trouble = "";               // the last thing the library complained about
+    let meter = 0, hintTimer = 0;
+    let quietUntil = 0;             // the first use note is up until then
+    let hinted = false;             // the "no sound?" note was shown in this conversation
+    let loud = 0;                   // how sure the service is that the member is talking right now (0 to 1)
+    const agent = (() => {
+      let q = "";
+      try { q = new URLSearchParams(location.search).get("agent") || ""; } catch (err) { /* no address */ }
+      return q === "off" ? "" : /^[A-Za-z0-9_]{8,64}$/.test(q) ? q : LIVE.agent;
+    })();
+    const sdk = () => (window.ElevenLabsClient && window.ElevenLabsClient.Conversation) || null;
+    const ready = () => !!(agent && sdk() && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.RTCPeerConnection);
+    const on = () => state !== "off";
+    const recall = (key) => { try { return localStorage.getItem(key); } catch (err) { return null; } };
+    const remember = (key, value) => { try { localStorage.setItem(key, value); } catch (err) { /* private mode */ } };
+    // Ways to open the line. If one fails, the next tap tries the next one.
+    // iPhones start with the setting ElevenLabs added for a microphone error in Safari.
+    const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const WAYS = apple ? [{ webRtc: { singlePeerConnection: false } }, {}, { connectionType: "websocket" }] : [{}, { webRtc: { singlePeerConnection: false } }, { connectionType: "websocket" }];
+    let way = 0;
+
+    /* ---- what is on the screen ---- */
+
+    function newTurn(text, how) {
+      app.classList.add("has-flow");
+      flow.querySelectorAll(".mod").forEach((m) => m.classList.add("is-past"));
+      turn = document.createElement("article");
+      turn.className = "turn";
+      if (text) {
+        const q = document.createElement("div");
+        q.className = how === "typed" ? "ask" : "ask ask--voice";
+        q.textContent = text;
+        turn.appendChild(q);
+        face.sent(q);
+      }
+      flow.appendChild(turn);
+      showTurn(turn);
+    }
+
+    // Carely's words, also as text
+    function says(text) {
+      const line = String(text || "").trim();
+      if (!line) return;
+      if (!turn || !turn.isConnected) newTurn("");
+      speak(turn, line);
+      lastLine = turn.lastElementChild;
+      const el = lastLine;
+      requestAnimationFrame(() => keepInView(el, el));
+      statusEl.textContent = line;
+    }
+    // the member talked over Carely: the text is cut back to what she really got to say
+    function corrected(c) {
+      const text = c && String(c.corrected_agent_response || "").trim();
+      if (text && lastLine && lastLine.isConnected) lastLine.textContent = text;
+    }
+
+    // the member said or typed something
+    function hears(text, how) {
+      heard = text; said++;
+      newTurn(text, how);
+      if (isUrgent(text)) emergency(text);       // safety first, and it does not wait for the AI
+    }
+    // words while the member is still talking, shown where typed words would be
+    function partial(e) {
+      if (state !== "on" || !e || e.type !== "tentative_user_transcript" || input.value) return;
+      const t = e.tentative_user_transcription_event && e.tentative_user_transcription_event.user_transcript;
+      if (t && !bar.classList.contains("is-live-talking")) input.placeholder = String(t).replace(/\s+/g, " ").slice(-34);
+    }
+
+    // the 911 or 988 card goes up at once, drawn by this page
+    async function emergency(text) {
+      const mine = turn;
+      mine.dataset.urgent = "1";
+      const spec = understand(text);
+      setDraft(null);
+      let last = null;
+      for (const ui of spec.ui || []) last = (await mount(mine, ui)) || last;
+      if (last) keepInView(last, mine.firstElementChild || last);
+      setChips(spec.next && spec.next.length ? spec.next : HOME_CHIPS);
+      tell("The app has put the emergency card on the member's screen, with a button to call for help.");
+    }
+
+    /* ---- the tools Carely can use ---- */
+
+    // what Carely is told about a card. Never the numbers that must not be said out loud
+    function facts(spec, el) {
+      const type = spec.ui && spec.ui[0] && spec.ui[0].type;
+      if (type === "idcard") return "The member's ID card is on their screen now. Do not say any number from it.";
+      let text = spec.say;
+      if (el) {
+        const seen = String(el.innerText || el.textContent || "").replace(/\s+/g, " ").replace(/\b(MBR|card ending|ending)\s*[\d ]{4,}/gi, "").trim().slice(0, 700);
+        if (seen) text += " On the card: " + seen;
+      }
+      if (activeDraft && activeDraft.open) text += " This is a draft. Nothing is done until the member confirms.";
+      return text;
+    }
+    const YES = /\b(yes|yeah|yep|yup|correct|right|sure|ok|okay|absolutely|definitely|perfect|sounds good|looks good|that works|go ahead|do it|book it|order it|confirm|mm hmm|uh huh)\b/;
+    const NO = /\b(no|nope|not|don'?t|do not|wait|cancel|stop|change|instead|but|actually|wrong|hold on)\b/;
+    const clearYes = (text) => { const t = text.toLowerCase().replace(/[^a-z' ]+/g, " ").replace(/\s+/g, " ").trim(); return t.split(" ").length <= 8 && YES.test(t) && !NO.test(t); };
+    const openDraft = () => (activeDraft && activeDraft.open && activeDraft.el.isConnected ? activeDraft : null);
+
+    const tools = {
+      // show a card for a plain request, and tell Carely what is on it
+      async show(args) {
+        const text = String((args && args.request) || "").slice(0, 200).trim();
+        if (!text) return "Nothing was shown. Ask for one specific thing.";
+        if (!turn || !turn.isConnected) newTurn("");
+        const mine = turn;
+        let spec;
+        try { spec = understand(text); } catch (err) { return "The app could not do that just now."; }
+        if (spec.unknown) return "The app has nothing for that request. Offer to have a person call them, or ask what they need in other words.";
+        const urgent = (spec.ui || []).some((u) => u.type === "urgent");
+        if (urgent && mine.dataset.urgent) return spec.say + " The emergency card is already on their screen.";
+        if (urgent) mine.dataset.urgent = "1";
+        setDraft(null);
+        flow.querySelectorAll(".mod").forEach((m) => m.classList.add("is-past"));
+        let last = null;
+        for (const ui of spec.ui || []) last = (await mount(mine, ui)) || last;
+        if (last) { face.lookAtEl(last); keepInView(last, mine.firstElementChild || last); }
+        setChips(spec.next && spec.next.length ? spec.next : HOME_CHIPS);
+        if (!/talk to|person|wrong/.test(text.toLowerCase())) lastAsk = text;
+        return facts(spec, last);
+      },
+      // change the draft that is open, in the member's words
+      async change_draft(args) {
+        const d = openDraft();
+        if (!d) return "There is no draft open to change.";
+        if (!d.set) return "This one can only be changed by tapping the card. " + (d.help || "");
+        const edit = readEdit(String((args && args.change) || "").slice(0, 200), false);
+        d.asked = false; d.askedAt = 0;          // any change means the details must be read back again
+        if (!edit || edit.act !== "set") return "The app did not understand that change. " + (d.help || "");
+        const changed = d.set(edit.patch);
+        return (changed.length ? "Changed. It is now " : "It was already set that way: ") + d.describe() + ". Nothing is done until the member confirms.";
+      },
+      // Book, order or request what the draft says. The page, not the AI, makes sure of two steps:
+      // first the details are read back, and only a clear yes from the member after that goes through.
+      async confirm_draft() {
+        const d = openDraft();
+        if (!d) return "There is no draft open. Nothing was done.";
+        if (d.asked && d.asked === d.readback() && said > d.askedAt && clearYes(heard)) {
+          collect = [];
+          try { d.confirm(); } finally { /* the card has spoken */ }
+          const outcome = collect.join(" ");
+          collect = null;
+          return outcome || "Done. It went through.";
+        }
+        d.asked = d.readback(); d.askedAt = said;
+        return "Not done yet. Read this back to the member and ask if it is right: " + d.readback() + " Use this tool again only after they clearly say yes.";
+      },
+      async cancel_draft() {
+        const d = openDraft();
+        if (!d) return "There is no draft open.";
+        collect = [];
+        try { d.skip(); } finally { /* the card has spoken */ }
+        const outcome = collect.join(" ");
+        collect = null;
+        return outcome || "Okay. Nothing was done.";
+      },
+    };
+
+    // a card's own line after a tap. Returns true when a tool caused it (then Carely gets it as the tool's answer)
+    function cardSaid(text) {
+      if (collect) { collect.push(text); return true; }
+      put("[tapped the card] " + text);
+      return false;
+    }
+
+    /* ---- the line ---- */
+
+    // tell Carely something without asking for an answer
+    function tell(text) { try { if (convo && convo.sendContextualUpdate) convo.sendContextualUpdate(text); } catch (err) { /* the line dropped */ } }
+    // put words on the line as if the member said them
+    function put(text) { sent = text; try { if (convo && convo.sendUserMessage) convo.sendUserMessage(text); } catch (err) { /* the line dropped */ } }
+    // typed, or tapped on a chip or a card
+    function send(text) {
+      if (state !== "on") return false;
+      hears(text, "typed");
+      put(text);
+      return true;
+    }
+    // while the member types, Carely holds back
+    input.addEventListener("input", () => { try { if (state === "on" && convo && convo.sendUserActivity) convo.sendUserActivity(); } catch (err) { /* the line dropped */ } });
+
+    function look(next) {
+      if (state === "off") return;
+      const talking = next === "speaking";
+      bar.classList.toggle("is-live-talking", talking);
+      face.voice(talking ? "talking" : "listening");
+      input.placeholder = state === "starting" ? "One moment..." : talking ? "Carely is talking" : "Listening...";
+      if (talking && state === "on" && !hinted) soundHint();
+    }
+    // Carely has started talking. The page cannot read the phone's volume, so the first few times it says what to check.
+    function soundHint() {
+      hinted = true;
+      const times = Number(recall("ma-live-heard")) || 0;
+      if (times >= 3) return;
+      remember("ma-live-heard", String(times + 1));
+      const mine = run;
+      clearTimeout(hintTimer);
+      hintTimer = setTimeout(() => {          // after the first use note, if that is still up
+        if (mine === run && state === "on") voice.note("Carely is talking now. No sound? Turn up the volume with the buttons on the side of your phone.", 8000);
+      }, Math.max(0, quietUntil - performance.now()));
+    }
+
+    // a short soft chime during the tap. It tells the member the sound is on before Carely says a word
+    function chime() {
+      try {
+        const rate = 22050, n = Math.round(rate * 0.46), pcm = new Int16Array(n), head = new DataView(new ArrayBuffer(44));
+        for (let i = 0; i < n; i++) {
+          const t = i / rate, second = t >= 0.17, at = second ? t - 0.17 : t;
+          pcm[i] = Math.round(7000 * Math.min(1, at / 0.008) * Math.exp(-7 * at) * Math.sin(2 * Math.PI * (second ? 880 : 660) * t));
+        }
+        const put4 = (o, s) => { for (let i = 0; i < 4; i++) head.setUint8(o + i, s.charCodeAt(i)); };
+        put4(0, "RIFF"); head.setUint32(4, 36 + n * 2, true); put4(8, "WAVE"); put4(12, "fmt "); head.setUint32(16, 16, true); head.setUint16(20, 1, true); head.setUint16(22, 1, true);
+        head.setUint32(24, rate, true); head.setUint32(28, rate * 2, true); head.setUint16(32, 2, true); head.setUint16(34, 16, true); put4(36, "data"); head.setUint32(40, n * 2, true);
+        const url = URL.createObjectURL(new Blob([head, pcm], { type: "audio/wav" })), a = new Audio(url);
+        a.onended = a.onerror = () => URL.revokeObjectURL(url);
+        const p = a.play();
+        if (p && p.catch) p.catch(() => {});
+      } catch (err) { /* no chime: the conversation still starts */ }
+    }
+
+    // The tap does three things in this order: a chime (sound is on), the microphone (asked for inside the tap,
+    // and held open, which is what lets an iPhone play Carely's voice a moment later), then the line itself.
+    function start() {
+      if (state !== "off" || !ready()) return;
+      state = "starting";
+      const mine = ++run;
+      turn = null; lastLine = null; heard = ""; said = 0; sent = ""; trouble = ""; hinted = false; loud = 0;
+      bar.classList.add("is-calling");
+      ringWake();
+      input.placeholder = "One moment...";
+      voice.labels();
+      chime();
+      if (recall("ma-live-note") !== "1") {
+        remember("ma-live-note", "1");
+        quietUntil = performance.now() + 10000;
+        voice.note("A live conversation sends your voice to ElevenLabs, which answers as Carely. This prototype uses made up data. Please do not say real health details.", 10000);
+      } else { quietUntil = 0; voice.note("Connecting to Carely. You should have heard a chime.", 20000); }
+      let held = null;
+      const letGo = () => { try { if (held) held.getTracks().forEach((t) => t.stop()); } catch (err) { /* already stopped */ } held = null; };
+      let asking;
+      try { asking = navigator.mediaDevices.getUserMedia({ audio: true }); } catch (err) { asking = Promise.reject(err); }
+      Promise.resolve(asking).then((stream) => {
+        held = stream;
+        if (mine !== run) { letGo(); return null; }      // cancelled while the phone was asking
+        return sdk().startSession(Object.assign({
+          agentId: agent,
+          clientTools: tools,
+          stripAudioTags: true,                 // words like [laughs] are for the voice, not for the screen
+          onMessage: (m) => { if (mine === run) message(m); },
+          onModeChange: (m) => { if (mine === run) look(m && m.mode); },
+          onInterruption: () => { if (mine === run) look("listening"); },
+          onAgentResponseCorrection: (c) => { if (mine === run) corrected(c); },
+          onIncomingEvent: (e) => { if (mine === run) partial(e); },
+          onVadScore: (v) => { if (mine === run) loud = Number(v && v.vadScore) || 0; },
+          onDisconnect: (why) => { if (mine === run) ended(why); },
+          onError: (text) => { trouble = String(text || ""); },      // the library reports small things here too. A line that really drops ends in onDisconnect
+          onUnhandledClientToolCall: () => {},
+        }, WAYS[way]));
+      }).then((line) => {
+        letGo();                                // the library holds its own microphone by now
+        if (!line) return;
+        if (mine !== run || state !== "starting") { try { const p = line.endSession(); if (p && p.catch) p.catch(() => {}); } catch (err) { /* already closed */ } return; }
+        convo = line;
+        state = "on";
+        bar.classList.remove("is-calling");
+        bar.classList.add("is-live");
+        app.classList.add("is-live");
+        const talking = bar.classList.contains("is-live-talking");
+        look(talking ? "speaking" : "listening");
+        syncBar();
+        voice.labels();
+        if ($("#toast").textContent.indexOf("Connecting") === 0) voice.clearNote();
+        watch();
+      }, (err) => {
+        letGo();
+        if (mine !== run) return;
+        const name = err && err.name, why = String((err && err.message) || err || "").replace(/\s+/g, " ").slice(0, 150);
+        const refused = /conversation token|\b40[13]\b|origin|authentication/i.test(why);      // the service said no to this page, not the phone to the microphone
+        if (!refused) way = (way + 1) % WAYS.length;        // the next tap tries another way to open the line
+        stop(refused ? "This address is not allowed to start a conversation yet. (" + why + ")"
+          : name === "NotAllowedError" || name === "SecurityError" || /not allowed|permission/i.test(why)
+          ? "I could not use the microphone. Tap to try again. If it keeps failing, allow the microphone for this site in your browser's settings."
+          : name === "NotFoundError" ? "I could not find a microphone on this device."
+          : "I could not start the conversation. Tap to try again." + (why ? " (" + why + ")" : ""));
+      });
+    }
+
+    // words arrive: the member's as the service heard them, and Carely's
+    function message(m) {
+      if (state === "off" || !m) return;
+      const text = String(m.message || "").trim(), who = m.role || m.source;
+      if (!text) return;
+      if (who === "user") {
+        if (text === sent) { sent = ""; return; }      // this page put it on the line itself, and already showed it
+        if (text.charAt(0) === "[") return;            // a note about a tap, not something to show
+        hears(text, "voice");
+      } else says(text);
+    }
+
+    // The green light and the rings follow who is talking. The library's volume meters add a little life where
+    // they work. On iPhones they stay at zero, so the look never depends on them.
+    function watch() {
+      cancelAnimationFrame(meter);
+      const tick = () => {
+        if (state !== "on" || !convo) return;
+        let out = 0, mic = 0;
+        try { out = convo.getOutputVolume ? convo.getOutputVolume() : 0; mic = convo.getInputVolume ? convo.getInputVolume() : 0; } catch (err) { /* no levels */ }
+        const talking = bar.classList.contains("is-live-talking");
+        bar.style.setProperty("--live-out", Math.max(talking ? 0.6 : 0, Math.min(1, out * 1.6)).toFixed(2));
+        bar.classList.toggle("is-hearing", !talking && (mic > 0.12 || loud > 0.6));
+        meter = requestAnimationFrame(tick);
+      };
+      meter = requestAnimationFrame(tick);
+    }
+
+    // the line closed: by the member, by Carely, or because something went wrong
+    function ended(why) {
+      if (state === "off") return;
+      const ctx = (why && why.context) || {};
+      const reason = why ? [why.reason, why.message, why.closeReason, ctx.reason, ctx.type, why.reason === "error" ? trouble : ""].filter(Boolean).join(" ").replace(/\s+/g, " ") : "";
+      stop(why && why.reason === "user" ? ""
+        : /quota|credit|payment|out of|exceeds your/i.test(reason) ? "The conversation ended. The ElevenLabs account is out of minutes."
+        : /max_duration/i.test(reason) ? "That was as long as one conversation can be. Tap the microphone to start another."
+        : why && why.reason === "error" ? "The conversation stopped. Tap the microphone to try again. (" + reason.slice(0, 140) + ")"
+        : "The conversation ended. Tap the microphone to talk again.");
+    }
+
+    // close the line and put the bar back
+    function stop(note) {
+      if (state === "off") return;
+      const line = convo;
+      run++;
+      state = "off"; convo = null; collect = null;
+      cancelAnimationFrame(meter);
+      clearTimeout(hintTimer);
+      if (line) { try { const p = line.endSession(); if (p && p.catch) p.catch(() => {}); } catch (err) { /* already closed */ } }
+      bar.classList.remove("is-live", "is-calling", "is-live-talking", "is-hearing");
+      app.classList.remove("is-live");
+      bar.style.removeProperty("--live-out");
+      face.voice("");
+      input.placeholder = activeDraft && activeDraft.set ? "Any changes?" : "Ask Carely";
+      ringSleep();
+      syncBar();
+      voice.labels();
+      if (note) voice.note(note, 9000); else voice.clearNote();
+      statusEl.textContent = note || "The conversation has ended.";
+    }
+
+    return { ready, on, send, stop, cardSaid, toggle: () => (state === "off" ? start() : stop("")), tools,
+      away: () => { if (state !== "off") stop("The conversation ended when you left this page. Tap the microphone to talk again."); } };
+  })();
+  voice.labels();                                           // the microphone button says what it will do
+  window.addEventListener("load", () => voice.labels());    // and again once the library has arrived
 
   /* ---- start ---- */
   // the app manifest only works from a web address, so skip it when this is opened as a plain file
@@ -3471,7 +3884,7 @@
   face.start();
 
   // small hook so this can be wired to a real model later
-  window.MemberAssistant = { ask, understand, MODULES };
+  window.MemberAssistant = { ask, understand, MODULES, live };
 })();
 </script>
 </body>

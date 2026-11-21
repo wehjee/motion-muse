@@ -2340,7 +2340,8 @@
       turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
       statusEl.textContent = line;
     } else if (edit.act === "help" || edit.act === "tell") {
-      const line = edit.act === "tell" ? edit.line : d.help;
+      const said = edit.act === "tell" ? edit.line : d.help;
+      const line = viaVoice ? said : said.replace("Say confirm", "Confirm").replace("say confirm", "confirm");      // typed: it does not ask the member to say anything
       voice.say(line);
       await speak(turn, line, "say--after");
       turn.lastElementChild.scrollIntoView({ block: "end", behavior: glide });
@@ -2887,7 +2888,7 @@
     let aloudPref = recall("ma-voice-always");      // "1" always, "0" only after talking, null: not chosen
     let talked = false;             // the latest question was asked out loud
     const canHear = () => !!Recognition && !refused;
-    const always = () => aloudPref === "1" || (aloudPref !== "0" && !canHear() && !!(natKey && natVoice));
+    const always = () => aloudPref === "1" || (!canHear() && !!(natKey && natVoice));
     voiceMode = always();
     if (voiceMode) app.classList.add("has-voice");
     repliesOn = recall("ma-spoken-replies") !== "off";
@@ -3198,7 +3199,8 @@
       if (player) {
         player.onended = player.onerror = player.onpause = player.ondurationchange = null;
         try { if (!player.paused && player.src !== SILENCE) player.pause(); } catch (err) { /* nothing playing */ }     // the blink of silence is left to finish
-        if (current && current.clip) { current.clip = false; rest(); }
+        if (current) current.clip = false;
+        if (player.src && player.src !== SILENCE) rest();      // also when it was stopped just as the sound was starting
       }
     }
 
@@ -3263,7 +3265,7 @@
       if (current !== job) return "";
       if (!started) {
         player.onended = player.onerror = player.onpause = player.ondurationchange = null;
-        try { player.pause(); } catch (err) { /* not playing */ }
+        rest();                              // the player must not keep holding the answer
         gentle = false;                      // from now on a tap makes the player ready the surer way
         return "blocked";
       }
@@ -3271,7 +3273,11 @@
       job.clip = true;
       player.onerror = job.done;
       // paused from outside the page (a call, the lock screen): the sentence is over, and the microphone does not open by itself after it
-      player.onpause = () => { if (!player.ended) { job.after = null; job.done(); } };
+      player.onpause = () => {
+        const atEnd = player.ended || (isFinite(player.duration) && player.duration > 0 && player.currentTime >= player.duration - 0.3);
+        if (!atEnd) job.after = null;
+        job.done();
+      };
       // in case the end is never reported. The length is a guess until the browser knows the real one
       const watch = () => {
         const secs = isFinite(player.duration) && player.duration > 0 ? player.duration - player.currentTime : 3 + text.length * 0.09;
@@ -3420,6 +3426,7 @@
         natKey = ""; natVoice = ""; natOff = false; turnedDown.clear();
         forget("ma-eleven-key"); forget("ma-eleven-voice");
         clips.forEach((url) => URL.revokeObjectURL(url)); clips.clear(); clipsKey = "";
+        if (!always() && !talked) voiceMode = false;      // no natural voice any more: taps stay quiet too
       },
     };
 

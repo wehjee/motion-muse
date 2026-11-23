@@ -201,7 +201,6 @@
     text-wrap: balance;
   }
   .hello__title span { display: block; }
-  .hello__sub { color: #8a908b; }
   .hello__nudge { margin-top: clamp(24px, 4.5vh, 40px); }
 
   /* ---------- conversation ---------- */
@@ -685,12 +684,17 @@
   .chip:active { transform: scale(0.96); }
   @media (hover: hover) { .chip:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 251, 249, 0.82) 100%); } }
 
+  /* The bar and Carely are one object. With the chat bar switched off it folds into a round Carely (the "orb"). */
+  .deck { position: relative; width: min(100%, 640px); }
+  .orbit { display: flex; flex-direction: column; align-items: center; width: 100%; }
   .bar {
     position: relative;
     isolation: isolate;
     display: flex;
     align-items: center;
-    width: min(100%, 640px);
+    width: 100%;
+    padding-left: calc((var(--h) - 44px) / 2 + 44px);      /* room for the home button, which sits in the bar's round end */
+    transition: width 0.5s var(--spring), --h 0.5s var(--spring), padding 0.5s var(--spring);
     height: var(--h);
     border-radius: calc(var(--h) / 2);         /* a true capsule. The round end and the avatar share a center */
     /* the glass is a touch cooler than the page, so its white rim has something to shine against */
@@ -806,7 +810,7 @@
     flex: none;
     display: grid; place-items: center;
     width: 44px; height: 44px;
-    margin-left: calc((var(--h) - 44px) / 2);  /* concentric with the capsule's round end */
+    margin-left: calc((var(--h) - 44px) / 2);  /* concentric with the capsule's round end (kept for other round buttons in the bar) */
     border-radius: 50%;
     color: var(--ink);
     z-index: 2;
@@ -895,6 +899,196 @@
   .bar.is-hearing .mic::after { animation-duration: 0.75s; }
   /* it asked something out loud and is waiting for a tap on the mic */
   .bar.wants-answer:not(.is-listening) .mic::after { box-shadow: 0 0 0 2px var(--green); animation: mic-ring 2.4s ease-out infinite; }
+
+  /* ---------- voice first ---------- */
+  @property --h { syntax: "<length>"; inherits: true; initial-value: 60px; }      /* lets the size glide when the bar folds */
+  .app { --orb: 72px; --hero: clamp(120px, 21vh, 184px); }
+
+  /* two round glass buttons beside Carely: home on the left, the chat bar switch on the right.
+     They keep their side in both layouts. In the chat bar they sit inside it, at its two ends. */
+  .deck-btn {
+    position: absolute; z-index: 5;
+    bottom: calc((var(--h) - 44px) / 2);
+    display: grid; place-items: center;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    color: var(--ink);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(238, 242, 239, 0.6) 100%);
+    box-shadow:
+      inset 1px 1.5px 0.5px rgba(255, 255, 255, 0.98),
+      inset -1px -1px 0.5px rgba(255, 255, 255, 0.6),
+      inset 0 -6px 8px -7px rgba(16, 19, 17, 0.14),
+      0 0 0 var(--hair) rgba(16, 19, 17, 0.08),
+      0 2px 5px -2px rgba(16, 19, 17, 0.14);
+    transition: transform 0.18s var(--ease), opacity 0.25s ease, background 0.2s ease;
+  }
+  .deck-btn svg { width: 21px; height: 21px; display: block; }
+  .deck-btn:active { transform: scale(0.92); }
+  @media (hover: hover) { .deck-btn:hover { background: linear-gradient(145deg, #ffffff 0%, rgba(228, 233, 230, 0.75) 100%); } }
+  .deck-btn:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+  .home-btn { left: calc((var(--h) - 44px) / 2); }
+  /* in the chat bar the switch sits just left of Carely's face, a little smaller, in her green */
+  .type-btn { right: calc(var(--h) * 1.1); width: 38px; height: 38px; bottom: calc((var(--h) - 38px) / 2); color: var(--green-ink); }
+  .type-btn::before { content: ""; position: absolute; inset: -3px; }       /* 44px tap area */
+  .type-btn .kb { display: none; }
+  .type-btn[hidden] { display: none; }
+  .has-toggle:not(.voice) .bar .field { padding-right: calc(var(--h) * 1.1 + 44px); }      /* the text box makes room for it */
+
+  /* chat bar off: the two buttons move out to the corners, level with the line under Carely */
+  .voice .deck { min-height: 44px; }
+  .voice .deck-btn { bottom: 0; width: 44px; height: 44px; color: var(--ink); -webkit-backdrop-filter: blur(14px) saturate(1.8); backdrop-filter: blur(14px) saturate(1.8); }
+  .voice .home-btn { left: 2px; }
+  .voice .type-btn { right: 2px; }
+  .voice .type-btn .kb { display: block; }
+  .voice .type-btn .hide { display: none; }
+  .voice:not(.has-flow) .home-btn { opacity: 0; visibility: hidden; transform: scale(0.8); }      /* already home: nothing to clear */
+
+  /* the orb */
+  .voice .bar {
+    --h: var(--orb);
+    width: var(--orb);
+    padding-left: 0;
+    box-shadow: 0 2px 4px rgba(16, 19, 17, 0.06), 0 12px 24px -12px rgba(14, 122, 62, 0.42), 0 26px 46px -28px rgba(16, 19, 17, 0.3);
+  }
+  .voice .bar .field { opacity: 0; visibility: hidden; pointer-events: none; position: absolute; }
+  .bar .field { transition: opacity 0.25s ease 0.12s; }
+  .voice .bar .avatar-btn { left: 0; width: auto; border-radius: 50%; }
+  .voice .bar .face { right: 50%; transform: scale(0.86); }      /* a touch smaller, so the eyes stay well inside the circle when she looks to the side */
+  .voice .bar .avatar__body { right: calc(var(--h) * -0.4); top: calc(var(--h) * -0.4); bottom: calc(var(--h) * -0.4); }
+  .voice .bar .avatar__halo { right: calc(var(--h) * -0.39); }
+  .voice .bar .avatar-btn:active ~ .avatar, .voice .bar:active .avatar { transform: scale(0.97); }
+  .avatar { transition: transform 0.2s var(--ease); }
+
+  /* home screen: Carely is the screen. She sits big in the middle and the greeting is hers */
+  .hero-slot { display: none; }
+  .hero .hero-slot {
+    display: flex; flex-direction: column; align-items: center;
+    position: relative; isolation: isolate;
+    min-height: calc(var(--hero) + 16px + 46px);
+    margin: clamp(12px, 3.2vh, 32px) 0 clamp(4px, 1.2vh, 12px);
+  }
+  .hero .hero-slot::before {                      /* a breath of mint around her */
+    content: ""; position: absolute; z-index: -1;
+    left: 50%; top: calc(var(--hero) / 2);
+    width: min(calc(var(--hero) * 2.5), 100vw); height: calc(var(--hero) * 2.5);      /* never wider than the screen, so nothing can be dragged sideways */
+    transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, rgba(58, 203, 120, 0.2) 0%, rgba(58, 203, 120, 0.09) 46%, rgba(58, 203, 120, 0) 100%);
+    pointer-events: none;
+    animation: hero-breath 5s ease-in-out infinite;
+  }
+  @keyframes hero-breath { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }      /* only its strength changes: growing it would widen the page */
+  .hero .bar {
+    --h: var(--hero);
+    width: var(--hero);
+    box-shadow: 0 3px 6px rgba(16, 19, 17, 0.05), 0 22px 44px -18px rgba(14, 122, 62, 0.5), 0 44px 70px -40px rgba(16, 19, 17, 0.28);
+  }
+  .hero .dock::before, .hero .dock::after { opacity: 0; }
+  .hero .chips { display: none; }                 /* the three things under the greeting are the suggestions here */
+
+  /* the line that says what is happening, or shows the member's words as they are heard */
+  .orb-line { display: none; }
+  .voice .orb-line {
+    display: block;
+    width: 100%; min-height: 22px; margin: 9px 0 2px; padding: 0 52px;
+    text-align: center; font-size: 15px; line-height: 22px; letter-spacing: -0.003em; color: var(--ink-2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .orb-line.is-mine { color: var(--ink); }
+  .orb-line__tip { color: var(--ink-3); }
+  .orb-line__tip:not(:empty)::before { content: "\00a0\00b7\00a0"; }
+  .hero .orb-line {
+    min-height: 46px;                             /* room for two lines of heard words, so the greeting below does not jump */
+    margin: 16px 0 0; padding: 0 4px;
+    font-size: 16px; line-height: 23px;
+    white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
+  }
+  .hero .orb-line.is-mine { font-size: 18px; line-height: 25px; }
+
+  /* a small stop sign on Carely while she listens or talks: one more tap ends it */
+  .bar__stop {
+    position: absolute; z-index: 5;
+    right: calc(var(--h) * 0.146 - 13px); bottom: calc(var(--h) * 0.146 - 13px);
+    width: 26px; height: 26px; border-radius: 50%;
+    display: none; place-items: center;
+    color: #fff;
+    background: linear-gradient(180deg, #17914a 0%, #0b6b35 100%);
+    box-shadow: 0 0 0 2.5px #fff, 0 4px 9px -3px rgba(14, 122, 62, 0.7);
+    pointer-events: none;
+  }
+  .bar__stop svg { width: 62%; height: 62%; display: block; }
+  .voice .bar.is-live .bar__stop, .voice .bar.is-calling .bar__stop, .voice .bar.is-listening .bar__stop, .voice .bar.is-speaking .bar__stop { display: grid; animation: stop-in 0.3s var(--spring) both; }
+  .hero .bar__stop { width: 38px; height: 38px; right: calc(var(--h) * 0.146 - 19px); bottom: calc(var(--h) * 0.146 - 19px); box-shadow: 0 0 0 3px #fff, 0 6px 12px -4px rgba(14, 122, 62, 0.7); }
+  @keyframes stop-in { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  /* rings that leave the orb while it listens. Quick ones while the member is talking */
+  .bar__waves { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1; opacity: 0; }
+  .bar__waves::before, .bar__waves::after { content: ""; position: absolute; inset: -3px; border-radius: inherit; box-shadow: 0 0 0 2px rgba(58, 203, 120, 0.5); opacity: 0; }
+  .voice .bar.is-live .bar__waves, .voice .bar.is-calling .bar__waves, .voice .bar.is-listening .bar__waves { opacity: 1; }
+  .voice .bar.is-live .bar__waves::before, .voice .bar.is-listening .bar__waves::before { animation: orb-wave 2.6s ease-out infinite; }
+  .voice .bar.is-live .bar__waves::after, .voice .bar.is-listening .bar__waves::after { animation: orb-wave 2.6s ease-out 1.3s infinite; }
+  .voice .bar.is-hearing .bar__waves::before, .voice .bar.is-hearing .bar__waves::after { animation-duration: 1.1s; }
+  .voice .bar.is-live-talking .bar__waves::before, .voice .bar.is-live-talking .bar__waves::after { animation: none; opacity: 0; }
+  .voice .bar.is-calling .bar__waves::before { animation: orb-wave 1s ease-out infinite; }
+  @keyframes orb-wave { from { transform: scale(1); opacity: 0.85; } to { transform: scale(1.42); opacity: 0; } }
+  .hero .bar__waves::before, .hero .bar__waves::after { box-shadow: 0 0 0 2.5px rgba(58, 203, 120, 0.45); }
+  @keyframes orb-wave-big { from { transform: scale(1); opacity: 0.8; } to { transform: scale(1.24); opacity: 0; } }
+  .hero .bar.is-live .bar__waves::before, .hero .bar.is-listening .bar__waves::before, .hero .bar.is-calling .bar__waves::before,
+  .hero .bar.is-live .bar__waves::after, .hero .bar.is-listening .bar__waves::after { animation-name: orb-wave-big; }
+  /* while Carely talks the whole orb swells a little with her voice */
+  .voice .bar.is-live-talking { transform: scale(calc(1 + var(--live-out, 0) * 0.05)); transition: transform 0.14s linear, width 0.5s var(--spring), --h 0.5s var(--spring); }
+  /* the breath of mint under Carely moves to the middle with her */
+  .voice .dock::after {
+    background:
+      radial-gradient(150px 78px at 50% calc(100% - 78px), rgba(58, 203, 120, 0.2) 0%, rgba(58, 203, 120, 0.07) 52%, rgba(58, 203, 120, 0) 100%),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 0, rgba(255, 255, 255, 0.5) 36px, rgba(255, 255, 255, 0.66) calc(100% - 26px), rgba(255, 255, 255, 0.93) 100%);
+  }
+  /* the suggestions are things to say */
+  .voice .chips::before { content: "Try saying"; flex: none; align-self: center; margin: 0 3px 0 4px; font-size: 14px; color: var(--ink-3); white-space: nowrap; }
+
+  /* ---------- the home screen, in both layouts ----------
+     One calm column: the date, Carely (when the chat bar is off), the greeting, and today's three things as plain pills. */
+  .hello { text-align: center; padding-top: clamp(30px, 8vh, 96px); }
+  .hello__date { margin-bottom: 10px; }
+  .hello__sub { margin-top: 10px; font-size: clamp(19px, 5.3vw, 24px); line-height: 1.3; letter-spacing: -0.012em; color: var(--ink-2); }
+  .hello__nudge { margin-top: clamp(18px, 3.2vh, 30px); }
+  .hello__title, .hello__nudge { transition: opacity 0.35s ease; }
+  .hero.is-busy .hello__title, .hero.is-busy .hello__nudge { opacity: 0.32; }      /* while she listens, the rest of the home screen steps back */
+  .has-flow .hello { padding-bottom: 64px; }      /* once a conversation starts, nothing from the home screen peeks in above it */
+  .hello .mod { width: 100%; padding: 0; border-radius: 0; background: none; box-shadow: none; animation: none; }
+  .hello .mod__ghost { display: none; }
+  .hello .mod__head { position: absolute; width: 1px; height: 1px; min-height: 0; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hello .mod__body { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .hello .item, .hello .item:first-child, .hello .item:last-child {
+    width: auto; max-width: 100%; min-height: 44px; padding: 0 18px 0 14px; gap: 9px;
+    border-radius: 999px;
+    background: var(--glass-fill);
+    box-shadow: var(--glass-rim), var(--glass-depth), var(--glass-edge), var(--glass-drop);
+    transition: transform 0.18s var(--ease), background 0.18s ease;
+  }
+  .hello button.item:active { transform: scale(0.97); }
+  .hello .item__dot, .hello .item.is-done .item__dot { width: auto; height: auto; background: none; }
+  .hello .item__dot svg { width: 19px; height: 19px; }
+  .hello .item__txt { display: block; flex: 0 1 auto; }
+  .hello .item__txt b { display: block; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hello .item__txt span, .hello .item em { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hello .item.is-done { background: var(--green-wash); box-shadow: none; color: var(--green-ink); }
+
+  @media (max-width: 370px) { .voice:not(.hero) .orb-line__tip { display: none; } }      /* no room beside the two buttons: the stop sign on Carely says it */
+  @media (max-width: 350px) {
+    .app { --orb: 66px; }
+    /* a narrow chat bar: the switch is a little smaller and sits closer, so the text box keeps its room */
+    .type-btn { width: 34px; height: 34px; bottom: calc((var(--h) - 34px) / 2); right: calc(var(--h) * 1.08); }
+    .type-btn::before { inset: -5px; }
+    .has-toggle:not(.voice) .bar .field { padding-left: 6px; padding-right: calc(var(--h) * 1.08 + 38px); }
+    /* a narrow chat bar during a conversation: home steps out so the words have room. It is back when the talking ends */
+    .app.is-busy:not(.voice) .home-btn { opacity: 0; visibility: hidden; }
+    .app.is-busy:not(.voice) .bar { padding-left: 4px; }
+  }
+  @media (max-height: 460px) {
+    .app { --orb: 54px; --hero: 96px; }
+    .voice .orb-line { margin-top: 4px; }
+  }
+
   /* a live conversation: the line is open. The mic turns into the button that ends it, green with slow rings */
   .bar.is-live .mic, .bar.is-calling .mic {
     color: #fff;
@@ -1061,6 +1255,12 @@
     .bar.is-listening .mic::after { animation: none; opacity: 0.8; }
     .bar.wants-answer:not(.is-listening) .mic::after { animation: none; opacity: 1; }
     .bar.is-live .mic::after, .bar.is-calling .mic::after { animation: none; opacity: 0.8; }
+    .bar, .deck-btn, .avatar { transition: none; }
+    .hero .hero-slot::before { animation: none; }
+    .voice .bar .bar__stop { animation: none !important; }
+    .voice .bar .bar__waves::before, .voice .bar .bar__waves::after { animation: none !important; }
+    .voice .bar.is-live .bar__waves::before, .voice .bar.is-listening .bar__waves::before { opacity: 0.7; }
+    .voice .bar.is-live-talking { transform: none; }
     .bar.is-listening .bar__glow { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
@@ -1084,7 +1284,9 @@
     <div class="column">
       <section class="hello" id="hello" aria-labelledby="greeting">
         <p class="hello__date" id="today"></p>
-        <h1 class="hello__title" id="greeting"><span id="greetingLine">Hello, Jamie.</span><span class="hello__sub">What do you need today?</span></h1>
+        <!-- voice first: on the home screen Carely sits here, big, in the middle. The script moves her between here and the dock -->
+        <div class="hero-slot" id="heroSlot"></div>
+        <h1 class="hello__title" id="greeting"><span id="greetingLine">Hello, Jamie.</span><span class="hello__sub" id="helloSub">What do you need today?</span></h1>
         <div class="hello__nudge" id="nudge"></div>
       </section>
       <div class="flow" id="flow"></div>
@@ -1095,7 +1297,16 @@
     <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
     <div class="chips" id="chips" role="group" aria-label="Things you can ask"></div>
 
+    <div class="deck" id="deck">
+    <button class="deck-btn home-btn" id="home" type="button" aria-label="Home. Start over">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="currentColor" d="M10.5 3.4a2.2 2.2 0 0 1 3 0l5.6 5.1c.6.5.9 1.2.9 2V18a2.5 2.5 0 0 1-2.5 2.5h-1.4a1.3 1.3 0 0 1-1.3-1.3v-4a1.7 1.7 0 0 0-1.7-1.7h-2.2a1.7 1.7 0 0 0-1.7 1.7v4a1.3 1.3 0 0 1-1.3 1.3H6.5A2.5 2.5 0 0 1 4 18v-7.5c0-.8.3-1.5.9-2z"/>
+        </svg>
+    </button>
+    <!-- Carely (the bar, or the round Carely it folds into) and the line that says what is happening -->
+    <div class="orbit" id="orbit">
     <form class="bar" id="bar" autocomplete="off" novalidate>
+      <span class="bar__waves" aria-hidden="true"></span>
       <span class="bar__glow" aria-hidden="true"></span>
       <span class="bar__ring" aria-hidden="true"><i></i></span>
       <div class="avatar" id="avatar" aria-hidden="true">
@@ -1107,12 +1318,6 @@
           <span class="eye eye--r" id="eyeR"></span>
         </span>
       </div>
-
-      <button class="icon-btn" id="home" type="button" aria-label="Home. Start over">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path fill="currentColor" d="M10.5 3.4a2.2 2.2 0 0 1 3 0l5.6 5.1c.6.5.9 1.2.9 2V18a2.5 2.5 0 0 1-2.5 2.5h-1.4a1.3 1.3 0 0 1-1.3-1.3v-4a1.7 1.7 0 0 0-1.7-1.7h-2.2a1.7 1.7 0 0 0-1.7 1.7v4a1.3 1.3 0 0 1-1.3 1.3H6.5A2.5 2.5 0 0 1 4 18v-7.5c0-.8.3-1.5.9-2z"/>
-        </svg>
-      </button>
 
       <div class="field">
         <label class="sr-only" for="message">Ask about your health plan</label>
@@ -1132,7 +1337,17 @@
       </div>
 
       <button class="avatar-btn" id="avatarBtn" type="button" aria-label="Start typing"></button>
+      <span class="bar__stop" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.4" fill="currentColor"/></svg></span>
     </form>
+    <!-- voice first: what is happening, in a few plain words. The same words are on the button for screen readers -->
+    <p class="orb-line" id="orbLine" aria-hidden="true"><span id="orbWords"></span><span class="orb-line__tip" id="orbTip"></span></p>
+    </div>
+    <!-- switches the chat bar on and off -->
+    <button class="deck-btn type-btn" id="typeToggle" type="button" aria-label="Show the chat bar">
+      <svg class="kb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.8" y="6" width="18.4" height="12" rx="3.2"/><path d="M6.6 9.8h.01M10.2 9.8h.01M13.8 9.8h.01M17.4 9.8h.01M6.6 13.2h.01M17.4 13.2h.01M9.4 14.6h5.2"/></svg>
+      <svg class="hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.8" y="3.6" width="18.4" height="11" rx="3.2"/><path d="M6.6 7.3h.01M10.2 7.3h.01M13.8 7.3h.01M17.4 7.3h.01M9.4 11h5.2"/><path d="m9 18.2 3 2.8 3-2.8"/></svg>
+    </button>
+    </div>
   </div>
 
   <p class="sr-only" id="status" role="status" aria-live="polite"></p>
@@ -1303,8 +1518,11 @@
       return { say: "You have one refill ready. Check the details and confirm, and I will send it to the pharmacy.", ui: [{ type: "refill", props: {} }], next: ["Show my ID card", "My deductible"] };
 
     const doctor = findDoctor(t);
-    const wantsBooking = /schedul|book|appointment|appt|make a visit|set up a visit|see (a|an|my|the) |visit with|check-?up|get in to see/.test(t);
-    if (doctor || wantsBooking) {
+    const wantsBooking = /schedul|book|appointment|appt|make a visit|set up a visit|see (a|an|my|the) |see some(one|body)|get seen|looked at|checked out|visit with|check-?up|get in to see/.test(t);
+    // said the way people talk: "my knee has been hurting". A problem we know, and no other question in the sentence
+    const ailing = !wantsBooking && /hurt|pain|ache|aching|sore|sick|rash|cough|fever|migraine|bothering/.test(t) && REASONS.some(([re]) => re.test(t)) &&
+      !/cover|cost|price|how much|pay|find|look for|near me|claim|bill|refill|approv/.test(t);
+    if (doctor || wantsBooking || ailing) {
       const spec = doctor ? SPEC[doctor.spec] : findSpecialty(t) || SPEC.primary;
       const doc = doctor || docsFor(spec.key)[0];
       const found = REASONS.find(([re]) => re.test(t));
@@ -1318,9 +1536,10 @@
       const slot = /afternoon|after work|evening|late/.test(t) ? 2 : /noon|lunch|midday/.test(t) ? 1 : 0;
       const about = found ? ` about ${reason.toLowerCase()}` : "";
       const kind = video ? "video visit" : "visit";
-      const say = dayAsked
+      const sorry = ailing ? "Sorry to hear that. " : "";
+      const say = sorry + (dayAsked
         ? `I found a ${kind} with ${doc.name} on ${dayAsked}${about}. Check the details, change anything, then confirm.`
-        : `Here is the soonest ${kind} with ${doc.name}${about}. Check the details, change anything, then confirm.`;
+        : `Here is the soonest ${kind} with ${doc.name}${about}. Check the details, change anything, then confirm.`);
       return { say, ui: [{ type: "schedule", props: { doc, reason, video, day, slot } }], next: [video ? "In person instead" : "Video instead", "A day later", "Morning works better", `Find another ${spec.one.replace(/^an? /, "")}`] };
     }
 
@@ -2250,7 +2469,7 @@
       liveDrafts[d.kind] = d;
     }
     activeDraft = d;
-    input.placeholder = d && d.set ? "Any changes?" : "Ask Carely";
+    if (!live.on()) input.placeholder = d && d.set ? "Any changes?" : "Ask Carely";
   }
   const DAY_RE = [/\bsun(day)?\b/, /\bmon(day)?\b/, /\btue(s|sday)?\b/, /\bwed(nesday)?\b/, /\bthu(r|rs|rsday)?\b/, /\bfri(day)?\b/, /\bsat(urday)?\b/];
   // only a whole short message counts as yes or no. "ok but make it thursday" is an edit.
@@ -2395,6 +2614,7 @@
     setThinking(true);                                // visual only: the gradient ring comes alive while the answer is made
     try {
     app.classList.add("has-flow");
+    place(true);
     setDraft(null);                                   // a new request: older drafts can still be tapped, but typing no longer changes them
     flow.querySelectorAll(".mod").forEach((m) => m.classList.add("is-past"));
 
@@ -2446,6 +2666,7 @@
     flow.innerHTML = "";
     setDraft(null);
     app.classList.remove("has-flow");
+    place(true);
     page.scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" });
     setChips(HOME_CHIPS);
     lastAsk = "";
@@ -2569,6 +2790,7 @@
           else if (roll < 0.78) { x = rand(-0.9, -0.2); y = rand(-0.85, -0.35); }
           else if (roll < 0.9) { x = rand(0.35, 0.8); y = rand(-0.4, 0.25); }
           else { x = rand(-1, -0.5); y = rand(0.2, 0.6); }
+          if (REST.x === 0 && roll >= 0.52) x *= Math.random() < 0.5 ? 0.6 : -0.6;      // round Carely: glances go to either side, and not as far
           const far = Math.hypot(x - eyes.x, y - eyes.y) > 0.9;
           lookAt(x, y);
           if (far && Math.random() < 0.45) blink(1, 60);
@@ -2637,6 +2859,8 @@
     return {
       start() { readSize(); render(); scheduleBlink(); wander(); setTimeout(() => blink(reduceMotion.matches ? 1 : 2, 70), 700); },
       resize() { readSize(); render(); },
+      // round Carely rests looking straight at the member. In the chat bar she rests looking along it, toward the words
+      center(on) { REST.x = on ? 0 : -0.78; if (mode === "idle" || mode === "follow") lookAt(REST.x, REST.y); },
       blink,
       lookAtEl,
       // `who` lets two things think at once: an answer being made, and the natural voice on its way
@@ -2687,6 +2911,7 @@
     sendBtn.tabIndex = hasText && !hearing ? 0 : -1;             // send is hidden while it listens
     $("#mic").tabIndex = hasText && !hearing ? -1 : 0;
     avatarBtn.setAttribute("aria-label", hearing ? "Cancel listening" : talking ? "Stop speaking" : hasText ? "Send" : "Start typing");
+    syncOrb();
   }
   async function submit() {
     if (voice.sendHeard()) return;               // heard words are always sent as voice, never as typed text
@@ -2702,6 +2927,7 @@
   input.addEventListener("input", () => { syncBar(); syncChips(); });
   bar.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
   avatarBtn.addEventListener("click", () => {
+    if (app.classList.contains("voice")) { $("#mic").click(); return; }      // voice first: Carely is the button. It does what the microphone button does
     if (voice.busy()) { voice.cancel(); return; }             // tapping the face stops listening or speaking
     if (input.value.trim()) submit(); else { input.focus(); face.hello(); }
   });
@@ -2928,6 +3154,7 @@
     // when the browser will not listen, the keyboard's own microphone key still types into the box
     function useKeyboard(message) {
       toast(message, 9000);
+      showBar(true, false);                  // voice first layout: bring the chat bar back so there is a box to type in
       input.focus();
     }
 
@@ -3537,6 +3764,7 @@
 
     function newTurn(text, how) {
       app.classList.add("has-flow");
+      place(true);
       flow.querySelectorAll(".mod").forEach((m) => m.classList.add("is-past"));
       turn = document.createElement("article");
       turn.className = "turn";
@@ -3868,6 +4096,134 @@
   voice.labels();                                           // the microphone button says what it will do
   window.addEventListener("load", () => voice.labels());    // and again once the library has arrived
 
+
+  /* =========================================================
+     9. VOICE FIRST
+     Talking is the whole experience. The chat bar is something the member can switch on or off.
+     With the chat bar off, the bar folds into a round Carely. One tap on her starts talking, the next ends it.
+     On the home screen she sits big in the middle. When a conversation starts she moves down to make room.
+     The keyboard button brings the chat bar back for typing. The choice is remembered on this device.
+     Add ?bar=on or ?bar=off to the address to force one layout.
+     ========================================================= */
+  const typeBtn = $("#typeToggle"), orbit = $("#orbit"), deck = $("#deck"), heroSlot = $("#heroSlot");
+  const orbLine = $("#orbLine"), orbWords = $("#orbWords"), orbTip = $("#orbTip");
+  function canTalk() { return live.ready() || !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+
+  // the words under Carely: what is happening, or what the member is saying
+  const ORB_KNOWN = ["Ask Carely", "Any changes?", "One moment...", "Listening...", "Carely is talking"];
+  function syncOrb() {
+    const has = (c) => bar.classList.contains(c);
+    const onLine = has("is-live") || has("is-calling");
+    app.classList.toggle("is-busy", has("is-listening") || has("is-speaking") || onLine);
+    if (!app.classList.contains("voice")) return;
+    const heard = input.value.trim(), hint = input.placeholder, idle = hint === "Ask Carely" || hint === "Any changes?";
+    let words, mine = false, tip = "";
+    if (heard) { words = heard; mine = true; }                                      // the member's words, as they are heard
+    else if (!idle && ORB_KNOWN.indexOf(hint) < 0) { words = hint; mine = true; }   // on the line they arrive in the hint
+    else if (!idle) { words = hint; tip = hint === "One moment..." ? "" : onLine ? "Tap to end" : "Tap to stop"; }
+    else if (has("is-speaking")) { words = "Carely is talking"; tip = "Tap to stop"; }
+    else if (has("is-thinking")) words = "One moment...";
+    else if (has("wants-answer")) words = "Tap to answer";
+    else words = "Tap to talk";
+    if (orbWords.textContent !== words) orbWords.textContent = words;
+    if (orbTip.textContent !== tip) orbTip.textContent = tip;
+    orbLine.classList.toggle("is-mine", mine);
+    const name = $("#mic").getAttribute("aria-label") || "";
+    avatarBtn.setAttribute("aria-label", !name || name === "Talk instead of typing" ? "Talk with Carely" : name);
+  }
+
+  // Carely's place: the middle of the home screen while nothing has been asked, else the dock at the bottom.
+  // She is one element. It is moved, and the move is shown as a glide from where she was.
+  function place(glide) {
+    const hero = app.classList.contains("voice") && !app.classList.contains("has-flow");
+    const want = hero ? heroSlot : deck;
+    if (app.classList.contains("hero") === hero && orbit.parentNode === want) return;
+    const from = bar.getBoundingClientRect();
+    const held = orbit.contains(document.activeElement) ? document.activeElement : null;
+    bar.style.transition = "none";                   // her size changes at once here. The glide below shows the change
+    app.classList.toggle("hero", hero);
+    if (orbit.parentNode !== want) { if (hero) heroSlot.appendChild(orbit); else deck.insertBefore(orbit, typeBtn); }
+    if (held && document.activeElement !== held) held.focus({ preventScroll: true });      // moving her must not drop the keyboard's place
+    face.resize();
+    syncGlass();
+    const to = bar.getBoundingClientRect();
+    bar.style.transition = "";
+    sizeLastTurn();
+    if (!glide || reduceMotion.matches || !bar.animate || !from.width || !to.width) return;
+    const round = Math.abs(from.width - from.height) < 2 && Math.abs(to.width - to.height) < 2;
+    const dx = from.left + from.width / 2 - (to.left + to.width / 2), dy = from.top + from.height / 2 - (to.top + to.height / 2);
+    const frames = round
+      ? [{ transform: "translate(" + dx.toFixed(1) + "px, " + dy.toFixed(1) + "px) scale(" + (from.width / to.width).toFixed(3) + ")" }, { transform: "none" }]
+      : [{ opacity: 0, transform: "scale(0.84)" }, { opacity: 1, transform: "none" }];      // bar to round Carely, or back: she simply arrives
+    bar.animate(frames, { duration: round ? 640 : 380, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
+    if (orbLine.animate) orbLine.animate([{ opacity: 0 }, { opacity: 0, offset: 0.45 }, { opacity: 1 }], { duration: 640, easing: "ease-out" });
+  }
+
+  function showBar(on, focus) {
+    const voiceFirst = !on;
+    if (voiceFirst && !canTalk()) return;            // nothing to talk with here: the chat bar stays
+    app.classList.toggle("voice", voiceFirst);
+    typeBtn.setAttribute("aria-label", on ? "Hide the chat bar" : "Show the chat bar");
+    if (voiceFirst && document.activeElement === input) input.blur();
+    face.center(voiceFirst);
+    place(true);
+    syncBar();
+    syncOrb();
+    if (on && focus) input.focus({ preventScroll: true });
+  }
+  typeBtn.addEventListener("click", () => {
+    const on = app.classList.contains("voice");      // voice layout now, so the tap switches the bar on
+    try { localStorage.setItem("ma-chat-bar", on ? "on" : "off"); } catch (err) { /* private mode */ }
+    showBar(on, on);
+  });
+  // the words follow the text box's hint and the bar's state, which the voice code already keeps up to date
+  if (window.MutationObserver) {
+    new MutationObserver(syncOrb).observe(input, { attributes: true, attributeFilter: ["placeholder"] });
+    new MutationObserver(syncOrb).observe(bar, { attributes: true, attributeFilter: ["class"] });
+  }
+  // the face is drawn from the bar's height, so it follows the bar while it folds and unfolds
+  if (window.ResizeObserver) new ResizeObserver(() => { face.resize(); syncGlass(); }).observe(bar);
+
+  // the greeting says how many things are waiting today
+  function syncHello() {
+    const body = $("#nudge .mod__body");
+    if (!body) return;
+    const left = Array.from(body.querySelectorAll("button.item")).filter((b) => b.style.display !== "none").length;
+    const count = ["", "one thing", "two things", "three things"][left] || left + " things";
+    $("#helloSub").textContent = left ? "I have " + count + " for you today." : "What do you need today?";
+  }
+
+  // which layout to start in: what the address says, else what was chosen before, else voice first wherever the phone can listen
+  function startLayout() {
+    let asked = "";
+    try { asked = new URLSearchParams(location.search).get("bar") || ""; } catch (err) { /* no address */ }
+    const first = () => {
+      let stored = "";
+      try { stored = localStorage.getItem("ma-chat-bar") || ""; } catch (err) { /* private mode */ }
+      const can = canTalk();
+      const want = asked === "on" || asked === "off" ? asked : stored === "on" || stored === "off" ? stored : "off";
+      typeBtn.hidden = !can;
+      app.classList.toggle("has-toggle", can);
+      const on = want === "on" || !can;
+      app.classList.toggle("voice", !on);
+      typeBtn.setAttribute("aria-label", on ? "Hide the chat bar" : "Show the chat bar");
+      face.center(!on);
+      place(false);
+      syncBar();
+      syncOrb();
+    };
+    first();
+    window.addEventListener("load", () => { if (typeBtn.hidden === canTalk()) first(); });      // the library arrives after this script, and it can decide whether talking is possible
+  }
+
+  // typing on a real keyboard brings the chat bar by itself. The key lands in the text box, because the box has focus before the letter is typed
+  document.addEventListener("keydown", (e) => {
+    if (!app.classList.contains("voice") || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || e.key.length !== 1 || e.key === " ") return;
+    const t = e.target;
+    if (t && t.closest && t.closest("input, textarea, select, [contenteditable]")) return;
+    showBar(true, true);
+  });
+
   /* ---- start ---- */
   // the app manifest only works from a web address, so skip it when this is opened as a plain file
   if (location.protocol.indexOf("http") === 0) {
@@ -3884,6 +4240,9 @@
   stagger(today);
   today.classList.add("is-built");
   $("#nudge").appendChild(today);
+  syncHello();
+  if (window.MutationObserver) new MutationObserver(syncHello).observe($("#nudge"), { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
+  startLayout();
 
   setChips(HOME_CHIPS);
   onResize();

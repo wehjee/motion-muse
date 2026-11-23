@@ -942,6 +942,9 @@
   .voice .type-btn .kb { display: block; }
   .voice .type-btn .hide { display: none; }
   .voice:not(.has-flow) .home-btn { opacity: 0; visibility: hidden; transform: scale(0.8); }      /* already home: nothing to clear */
+  /* on the home screen the deck holds only the switch. The rest of its strip is see-through, so taps and drags must pass through it */
+  .hero .deck { pointer-events: none; }
+  .hero .deck-btn { pointer-events: auto; }
 
   /* the orb */
   .voice .bar {
@@ -994,6 +997,8 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .orb-line.is-mine { color: var(--ink); }
+  .voice:not(.hero) .orb-line.is-mine { direction: rtl; }
+  .voice:not(.hero) .orb-line.is-mine #orbWords { direction: ltr; unicode-bidi: isolate; }
   .orb-line__tip { color: var(--ink-3); }
   .orb-line__tip:not(:empty)::before { content: "\00a0\00b7\00a0"; }
   .hero .orb-line {
@@ -1073,6 +1078,19 @@
   .hello .item__txt span, .hello .item em { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .hello .item.is-done { background: var(--green-wash); box-shadow: none; color: var(--green-ink); }
 
+  @supports (height: 1svh) {
+    .app { --hero: clamp(120px, 21svh, 184px); }
+    .hero .hero-slot { margin: clamp(12px, 3.2svh, 32px) 0 clamp(4px, 1.2svh, 12px); }
+    .hello { padding-top: clamp(30px, 8svh, 96px); }
+    .hello__nudge { margin-top: clamp(18px, 3.2svh, 30px); }
+  }
+  /* short screens (a small iPhone with Safari's bars showing): tighten up so the three pills stay in view */
+  @media (max-height: 600px) {
+    .app { --hero: 112px; }
+    .hello { padding-top: 14px; }
+    .hero .orb-line { min-height: 23px; }
+    .hello .mod__body { gap: 8px; }
+  }
   @media (max-width: 370px) { .voice:not(.hero) .orb-line__tip { display: none; } }      /* no room beside the two buttons: the stop sign on Carely says it */
   @media (max-width: 350px) {
     .app { --orb: 66px; }
@@ -2207,7 +2225,7 @@
         $("[data-again]", m.el).addEventListener("click", () => api.ask("Voice settings"));
       });
       landFocus(m.el);
-      api.say(aloud ? "Saved. I will read every answer aloud in this voice." : "Saved. I will use this voice when you talk to me. Tap the microphone to try it.", HOME_CHIPS, true);     // shown, not spoken: the sample is still playing
+      api.say(aloud ? "Saved. I will read every answer aloud in this voice." : micWords("Saved. I will use this voice when you talk to me. Tap the microphone to try it."), HOME_CHIPS, true);     // shown, not spoken: the sample is still playing
     }
     saveBtn.addEventListener("click", () => play(true));
     tryBtn.addEventListener("click", () => play(false));
@@ -3123,6 +3141,7 @@
     toldSilent = recall("ma-voice-silent") === "1";
 
     function toast(text, ms = 6500) {
+      text = micWords(text);
       clearTimeout(toastTimer);
       toastEl.textContent = text;
       toastEl.hidden = false;
@@ -3155,6 +3174,11 @@
     function useKeyboard(message) {
       toast(message, 9000);
       showBar(true, false);                  // voice first layout: bring the chat bar back so there is a box to type in
+      if (!canTalk()) {                      // this phone will not listen at all: no switch back to a Carely that cannot hear
+        typeBtn.hidden = true;
+        app.classList.remove("has-toggle");
+        try { localStorage.setItem("ma-chat-bar", "on"); } catch (err) { /* private mode */ }
+      }
       input.focus();
     }
 
@@ -3707,10 +3731,11 @@
       note: (text, ms) => toast(text, ms),       // a short note above the chat bar
       clearNote: clearToast,
       labels: showControls,
+      canHear,
       // true when the natural voice will read the next answer. It takes a moment to arrive, so it is asked for early
       early: () => voiceMode && repliesOn && naturalOn(),
       // what to say after a draft, in words that match what the microphone will do next
-      hint: () => (!talked ? "" : autoOk && autoMisses === 0 ? " Tell me what to change, or say confirm." : " Tap the microphone to change something or to confirm."),
+      hint: () => micWords(!talked ? "" : autoOk && autoMisses === 0 ? " Tell me what to change, or say confirm." : " Tap the microphone to change something or to confirm."),
     };
   })();
 
@@ -4107,7 +4132,9 @@
      ========================================================= */
   const typeBtn = $("#typeToggle"), orbit = $("#orbit"), deck = $("#deck"), heroSlot = $("#heroSlot");
   const orbLine = $("#orbLine"), orbWords = $("#orbWords"), orbTip = $("#orbTip");
-  function canTalk() { return live.ready() || !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+  function canTalk() { return live.ready() || voice.canHear(); }
+  // in the voice layout there is no microphone button to point to: Carely is the button
+  function micWords(text) { return app.classList.contains("voice") ? String(text).replace(/Tap the microphone/g, "Tap Carely") : text; }
 
   // the words under Carely: what is happening, or what the member is saying
   const ORB_KNOWN = ["Ask Carely", "Any changes?", "One moment...", "Listening...", "Carely is talking"];
@@ -4165,6 +4192,7 @@
     app.classList.toggle("voice", voiceFirst);
     typeBtn.setAttribute("aria-label", on ? "Hide the chat bar" : "Show the chat bar");
     if (voiceFirst && document.activeElement === input) input.blur();
+    if (voiceFirst && input.value && !bar.classList.contains("is-listening")) { input.value = ""; syncChips(); }      // typed but not sent: it must not sit under Carely as if she heard it
     face.center(voiceFirst);
     place(true);
     syncBar();

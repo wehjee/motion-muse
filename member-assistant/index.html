@@ -999,7 +999,7 @@
   .orb-line.is-mine { color: var(--ink); }
   .voice:not(.hero) .orb-line.is-mine { direction: rtl; }
   .voice:not(.hero) .orb-line.is-mine #orbWords { direction: ltr; unicode-bidi: isolate; }
-  .orb-line__tip { color: var(--ink-3); }
+  .orb-line__tip { color: var(--ink-2); }
   .orb-line__tip:not(:empty)::before { content: "\00a0\00b7\00a0"; }
   .hero .orb-line {
     min-height: 46px;                             /* room for two lines of heard words, so the greeting below does not jump */
@@ -1057,7 +1057,8 @@
   .hello__sub { margin-top: 10px; font-size: clamp(19px, 5.3vw, 24px); line-height: 1.3; letter-spacing: -0.012em; color: var(--ink-2); }
   .hello__nudge { margin-top: clamp(18px, 3.2vh, 30px); }
   .hello__title, .hello__nudge { transition: opacity 0.35s ease; }
-  .hero.is-busy .hello__title, .hero.is-busy .hello__nudge { opacity: 0.32; }      /* while she listens, the rest of the home screen steps back */
+  .hero.is-busy .hello__title, .hero.is-busy .hello__nudge { opacity: 0.62; }      /* while she listens, the rest of the home screen steps back. It stays readable: the pills still work */
+  .hero.is-busy .hello__sub { color: var(--ink); }
   .has-flow .hello { padding-bottom: 64px; }      /* once a conversation starts, nothing from the home screen peeks in above it */
   .hello .mod { width: 100%; padding: 0; border-radius: 0; background: none; box-shadow: none; animation: none; }
   .hello .mod__ghost { display: none; }
@@ -1087,7 +1088,9 @@
   /* short screens (a small iPhone with Safari's bars showing): tighten up so the three pills stay in view */
   @media (max-height: 600px) {
     .app { --hero: 112px; }
-    .hello { padding-top: 14px; }
+    .hello { padding-top: 34px; }                 /* the date must stay clear of the tag at the top right */
+    .hello__date { margin-bottom: 4px; }
+    .hero .hero-slot { margin-top: 0; }
     .hero .orb-line { min-height: 23px; }
     .hello .mod__body { gap: 8px; }
   }
@@ -1278,7 +1281,8 @@
     .voice .bar .bar__stop { animation: none !important; }
     .voice .bar .bar__waves::before, .voice .bar .bar__waves::after { animation: none !important; }
     .voice .bar.is-live .bar__waves::before, .voice .bar.is-listening .bar__waves::before { opacity: 0.7; }
-    .voice .bar.is-live-talking { transform: none; }
+    .voice .bar.is-live-talking .bar__waves::before { opacity: 0; }
+    .voice .bar.is-live-talking { transform: none; transition: none; }
     .bar.is-listening .bar__glow { animation: none; }
     .done__check path { stroke-dashoffset: 0; }
     .mod__ghost i { animation: none; }
@@ -1361,7 +1365,7 @@
     <p class="orb-line" id="orbLine" aria-hidden="true"><span id="orbWords"></span><span class="orb-line__tip" id="orbTip"></span></p>
     </div>
     <!-- switches the chat bar on and off -->
-    <button class="deck-btn type-btn" id="typeToggle" type="button" aria-label="Show the chat bar">
+    <button class="deck-btn type-btn" id="typeToggle" type="button" aria-label="Keyboard. Show the chat bar">
       <svg class="kb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.8" y="6" width="18.4" height="12" rx="3.2"/><path d="M6.6 9.8h.01M10.2 9.8h.01M13.8 9.8h.01M17.4 9.8h.01M6.6 13.2h.01M17.4 13.2h.01M9.4 14.6h5.2"/></svg>
       <svg class="hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.8" y="3.6" width="18.4" height="11" rx="3.2"/><path d="M6.6 7.3h.01M10.2 7.3h.01M13.8 7.3h.01M17.4 7.3h.01M9.4 11h5.2"/><path d="m9 18.2 3 2.8 3-2.8"/></svg>
     </button>
@@ -2685,6 +2689,7 @@
     setDraft(null);
     app.classList.remove("has-flow");
     place(true);
+    if (app.classList.contains("voice") && (document.activeElement === homeBtn || document.activeElement === document.body)) avatarBtn.focus({ preventScroll: true });      // Home hides itself here: focus goes to Carely, not to nothing
     page.scrollTo({ top: 0, behavior: reduceMotion.matches ? "auto" : "smooth" });
     setChips(HOME_CHIPS);
     lastAsk = "";
@@ -2945,7 +2950,12 @@
   input.addEventListener("input", () => { syncBar(); syncChips(); });
   bar.addEventListener("submit", (e) => { e.preventDefault(); submit(); });
   avatarBtn.addEventListener("click", () => {
-    if (app.classList.contains("voice")) { $("#mic").click(); return; }      // voice first: Carely is the button. It does what the microphone button does
+    if (app.classList.contains("voice")) {       // voice first: Carely is the button
+      // the phone's own listening or reading is on: this tap sends what was heard, or else just stops. No apology, no new listening
+      if (!live.on() && voice.busy()) { if (!voice.sendHeard()) voice.cancel(); return; }
+      $("#mic").click();                         // otherwise she does what the microphone button does
+      return;
+    }
     if (voice.busy()) { voice.cancel(); return; }             // tapping the face stops listening or speaking
     if (input.value.trim()) submit(); else { input.focus(); face.hello(); }
   });
@@ -3831,7 +3841,7 @@
     function partial(e) {
       if (state !== "on" || !e || e.type !== "tentative_user_transcript" || input.value) return;
       const t = e.tentative_user_transcription_event && e.tentative_user_transcription_event.user_transcript;
-      if (t && !bar.classList.contains("is-live-talking")) input.placeholder = String(t).replace(/\s+/g, " ").slice(-34);
+      if (t && !bar.classList.contains("is-live-talking")) { const said = String(t).replace(/\s+/g, " "); input.placeholder = said.length > 34 ? said.slice(-34).replace(/^\S*\s/, "") : said; }
     }
 
     // the 911 or 988 card goes up at once, drawn by this page
@@ -4112,7 +4122,7 @@
       syncBar();
       voice.labels();
       if (note) voice.note(note, 9000); else voice.clearNote();
-      statusEl.textContent = note || "The conversation has ended.";
+      statusEl.textContent = note ? micWords(note) : "The conversation has ended.";
     }
 
     return { ready, on, send, stop, cardSaid, toggle: () => (state === "off" ? start() : stop("")), tools,
@@ -4134,7 +4144,13 @@
   const orbLine = $("#orbLine"), orbWords = $("#orbWords"), orbTip = $("#orbTip");
   function canTalk() { return live.ready() || voice.canHear(); }
   // in the voice layout there is no microphone button to point to: Carely is the button
-  function micWords(text) { return app.classList.contains("voice") ? String(text).replace(/Tap the microphone/g, "Tap Carely") : text; }
+  function micWords(text) {
+    if (!app.classList.contains("voice")) return text;
+    return String(text).replace(/Tap the microphone/g, "Tap Carely")
+      .replace("Please type instead.", "Tap the keyboard button to type instead.")
+      .replace("Please try again, or type instead.", "Please try again, or tap the keyboard button to type.")
+      .replace("You can type it, or tap one of the suggestions.", "You can tap the keyboard button to type it.");
+  }
 
   // the words under Carely: what is happening, or what the member is saying
   const ORB_KNOWN = ["Ask Carely", "Any changes?", "One moment...", "Listening...", "Carely is talking"];
@@ -4145,7 +4161,10 @@
     if (!app.classList.contains("voice")) return;
     const heard = input.value.trim(), hint = input.placeholder, idle = hint === "Ask Carely" || hint === "Any changes?";
     let words, mine = false, tip = "";
-    if (heard) { words = heard; mine = true; }                                      // the member's words, as they are heard
+    if (heard) {                                                                    // the member's words, as they are heard
+      words = app.classList.contains("hero") && heard.length > 90 ? "... " + heard.slice(-90).replace(/^\S*\s/, "") : heard;      // big Carely has three lines: keep the newest words
+      mine = true;
+    }
     else if (!idle && ORB_KNOWN.indexOf(hint) < 0) { words = hint; mine = true; }   // on the line they arrive in the hint
     else if (!idle) { words = hint; tip = hint === "One moment..." ? "" : onLine ? "Tap to end" : "Tap to stop"; }
     else if (has("is-speaking")) { words = "Carely is talking"; tip = "Tap to stop"; }
@@ -4156,7 +4175,7 @@
     if (orbTip.textContent !== tip) orbTip.textContent = tip;
     orbLine.classList.toggle("is-mine", mine);
     const name = $("#mic").getAttribute("aria-label") || "";
-    avatarBtn.setAttribute("aria-label", !name || name === "Talk instead of typing" ? "Talk with Carely" : name);
+    avatarBtn.setAttribute("aria-label", has("is-speaking") && !onLine ? "Stop speaking" : !name || name === "Talk instead of typing" ? "Talk with Carely" : name);
   }
 
   // Carely's place: the middle of the home screen while nothing has been asked, else the dock at the bottom.
@@ -4190,7 +4209,7 @@
     const voiceFirst = !on;
     if (voiceFirst && !canTalk()) return;            // nothing to talk with here: the chat bar stays
     app.classList.toggle("voice", voiceFirst);
-    typeBtn.setAttribute("aria-label", on ? "Hide the chat bar" : "Show the chat bar");
+    typeBtn.setAttribute("aria-label", on ? "Keyboard. Hide the chat bar" : "Keyboard. Show the chat bar");
     if (voiceFirst && document.activeElement === input) input.blur();
     if (voiceFirst && input.value && !bar.classList.contains("is-listening")) { input.value = ""; syncChips(); }      // typed but not sent: it must not sit under Carely as if she heard it
     face.center(voiceFirst);
@@ -4234,19 +4253,28 @@
       app.classList.toggle("has-toggle", can);
       const on = want === "on" || !can;
       app.classList.toggle("voice", !on);
-      typeBtn.setAttribute("aria-label", on ? "Hide the chat bar" : "Show the chat bar");
+      typeBtn.setAttribute("aria-label", on ? "Keyboard. Hide the chat bar" : "Keyboard. Show the chat bar");
       face.center(!on);
       place(false);
       syncBar();
       syncOrb();
     };
     first();
-    window.addEventListener("load", () => { if (typeBtn.hidden === canTalk()) first(); });      // the library arrives after this script, and it can decide whether talking is possible
+    // the library arrives after this script, and it can decide whether talking is possible
+    window.addEventListener("load", () => {
+      if (typeBtn.hidden !== canTalk()) return;
+      if (document.activeElement === input || input.value) {       // someone is already typing: only the switch appears, the chat bar stays
+        typeBtn.hidden = !canTalk();
+        app.classList.toggle("has-toggle", canTalk());
+        return;
+      }
+      first();
+    });
   }
 
   // typing on a real keyboard brings the chat bar by itself. The key lands in the text box, because the box has focus before the letter is typed
   document.addEventListener("keydown", (e) => {
-    if (!app.classList.contains("voice") || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || e.key.length !== 1 || e.key === " ") return;
+    if (!app.classList.contains("voice") || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || !e.key || e.key.length !== 1 || e.key === " ") return;
     const t = e.target;
     if (t && t.closest && t.closest("input, textarea, select, [contenteditable]")) return;
     showBar(true, true);

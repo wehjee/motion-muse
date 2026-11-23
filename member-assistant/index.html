@@ -1110,6 +1110,32 @@
     .voice .orb-line { margin-top: 4px; }
   }
 
+
+  /* ---------- Carely, the sprout ----------
+     Drawn by the Open Bot Avatar renderer into .sprout. She stands free: no green ball behind her.
+     In the chat bar she sits in its round end. With the chat bar off she is the whole button. */
+  .sprout { display: none; }
+  .sprout-on .avatar { display: none; }                     /* the older face steps aside */
+  .sprout-on .sprout {
+    display: block; position: absolute; z-index: 1;
+    top: 50%; right: calc(var(--h) * 0.1);                   /* her middle is where the older face had its eyes */
+    width: calc(var(--h) * 0.9); height: calc(var(--h) * 0.9);
+    margin-top: calc(var(--h) * -0.45);
+    pointer-events: none;                                    /* taps go to the button that lies over her */
+    transition: transform 0.2s var(--ease);
+  }
+  /* chat bar off: nothing but her. The glass of the bar is put away, and she fills the button and a little more */
+  .sprout-on.voice .bar {
+    background: none; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .sprout-on.voice .bar::before, .sprout-on.voice .bar::after, .sprout-on.voice .bar .bar__ring, .sprout-on.voice .bar .bar__glow { display: none; }
+  .sprout-on.voice .sprout { top: -8%; right: -8%; width: 116%; height: 116%; margin-top: 0; }
+  .sprout-on.voice .bar:active .sprout { transform: scale(0.95); }
+  /* the stop sign sits on the rim of her pot */
+  .sprout-on.voice .bar__stop { right: calc(var(--h) * 0.1 - 13px); bottom: calc(var(--h) * 0.06 - 13px); }
+  .sprout-on.hero .bar__stop { right: calc(var(--h) * 0.1 - 19px); bottom: calc(var(--h) * 0.06 - 19px); }
+
   /* a live conversation: the line is open. The mic turns into the button that ends it, green with slow rings */
   .bar.is-live .mic, .bar.is-calling .mic {
     color: #fff;
@@ -1276,7 +1302,7 @@
     .bar.is-listening .mic::after { animation: none; opacity: 0.8; }
     .bar.wants-answer:not(.is-listening) .mic::after { animation: none; opacity: 1; }
     .bar.is-live .mic::after, .bar.is-calling .mic::after { animation: none; opacity: 0.8; }
-    .bar, .deck-btn, .avatar { transition: none; }
+    .bar, .deck-btn, .avatar, .sprout-on .sprout { transition: none; }
     .hero .hero-slot::before { animation: none; }
     .voice .bar .bar__stop { animation: none !important; }
     .voice .bar .bar__waves::before, .voice .bar .bar__waves::after { animation: none !important; }
@@ -1295,7 +1321,7 @@
 </head>
 <body>
 
-<div class="app" id="app">
+<div class="app sprout-on" id="app">
   <div class="tag">Carely · prototype · sample data</div>
   <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true" aria-label="Spoken replies">
     <svg class="on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.2L12 18.5v-13L7.2 9.5z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/><path d="M18.2 6.5a8 8 0 0 1 0 11"/></svg>
@@ -1340,6 +1366,8 @@
           <span class="eye eye--r" id="eyeR"></span>
         </span>
       </div>
+      <!-- Carely: the sprout avatar is drawn in here by the Open Bot Avatar renderer. The older face above is the fallback -->
+      <div class="sprout" id="sprout" aria-hidden="true"></div>
 
       <div class="field">
         <label class="sr-only" for="message">Ask about your health plan</label>
@@ -1375,6 +1403,8 @@
   <p class="sr-only" id="status" role="status" aria-live="polite"></p>
 </div>
 
+<!-- Open Bot Avatar 0.3.1 (MIT licence, see vendor/). It draws Carely, the sprout. https://github.com/dominikscholz/open-bot-avatar -->
+<script src="vendor/open-bot-avatar-0.3.1.js"></script>
 <script>
 (() => {
   "use strict";
@@ -2700,7 +2730,8 @@
      5. THE AVATAR  (eyes that blink, look around and react)
      ========================================================= */
 
-  const face = (() => {
+  const blobFace = (() => {
+    let retired = false;          // true once the sprout has taken over: this face then draws nothing
     const REST = { x: -0.78, y: 0 };
     const eyes = { x: REST.x, y: REST.y, vx: 0, vy: 0, tx: REST.x, ty: REST.y, lid: 0, lidTarget: 0, open: 1, openTarget: 1, hop: 0, hopV: 0, glow: 0.85, glowTarget: 0.85 };
     let mode = "idle";            // idle | follow | typing | thinking
@@ -2765,7 +2796,7 @@
       if (settled) { running = false; return; }
       requestAnimationFrame(step);
     }
-    function wake() { if (running) return; running = true; lastT = performance.now(); requestAnimationFrame(step); }
+    function wake() { if (running || retired) return; running = true; lastT = performance.now(); requestAnimationFrame(step); }
 
     function lookAt(x, y) { eyes.tx = clamp(x, -1, 1); eyes.ty = clamp(y, -1, 1); wake(); }
     function lookAtPoint(px, py) {
@@ -2794,6 +2825,7 @@
     }
     function scheduleBlink() {
       clearTimeout(blinkTimer);
+      if (retired) return;
       blinkTimer = setTimeout(() => {
         if (!document.hidden) { if (reduceMotion.matches) blink(1, 140); else blink(Math.random() < 0.16 ? 2 : 1, rand(60, 90)); }
         scheduleBlink();
@@ -2803,7 +2835,7 @@
     let wanderTimer = 0;
     function wander() {
       clearTimeout(wanderTimer);
-      if (reduceMotion.matches) return;
+      if (reduceMotion.matches || retired) return;
       wanderTimer = setTimeout(() => {
         if (mode === "idle" && !document.hidden) {
           const roll = Math.random();
@@ -2880,7 +2912,9 @@
     document.addEventListener("visibilitychange", () => { if (!document.hidden) { scheduleBlink(); wander(); wake(); } });
 
     return {
-      start() { readSize(); render(); scheduleBlink(); wander(); setTimeout(() => blink(reduceMotion.matches ? 1 : 2, 70), 700); },
+      retire() { retired = true; clearTimeout(blinkTimer); clearTimeout(wanderTimer); },
+      revive() { retired = false; this.start(); },
+      start() { if (retired) return; readSize(); render(); scheduleBlink(); wander(); setTimeout(() => blink(reduceMotion.matches ? 1 : 2, 70), 700); },
       resize() { readSize(); render(); },
       // round Carely rests looking straight at the member. In the chat bar she rests looking along it, toward the words
       center(on) { REST.x = on ? 0 : -0.78; if (mode === "idle" || mode === "follow") lookAt(REST.x, REST.y); },
@@ -2922,6 +2956,122 @@
       },
     };
   })();
+
+
+  /* =========================================================
+     5b. CARELY, THE SPROUT
+     The avatar is the "sprout" from Open Bot Avatar (MIT, by Dominik Scholz): https://github.com/dominikscholz/open-bot-avatar
+     Its renderer draws her, with her own breathing, blinking and looking around. This part only tells it
+     what Carely is doing, in the words the rest of the page already uses for the older face:
+       thinking   the answer is being made, or the line is connecting   three hopping dots
+       listening  the microphone is open                                she looks straight at the member
+       talking    she is reading or speaking                            happy eyes and a small hop
+       happy      something was booked or ordered                       a short celebration
+     If the renderer is not there, the older green face is used and nothing else changes.
+     ========================================================= */
+  const SPROUT = { id: "sprout", color: "#1fbf68", eyes: "#ffffff" };      // her green, and white eyes
+  // one small thing the renderer uses that phones from before 2022 do not have
+  if (!Array.prototype.at) Object.defineProperty(Array.prototype, "at", { configurable: true, writable: true, value: function (i) { i = Math.trunc(i) || 0; if (i < 0) i += this.length; return this[i]; } });
+  function sproutFace() {
+    const lib = window.OpenBotAvatar, host = $("#sprout");
+    if (!lib || !lib.mountAvatar || !lib.getExample || !host) return null;
+    const definition = lib.getExample(SPROUT.id);
+    if (!definition) return null;
+    const thinkers = new Set();
+    let voiceState = "", glance = null, caret = null, cheer = false, party = false;
+    let glanceTimer = 0, cheerTimer = 0, partyTimer = 0, shown = "";
+    const avatar = lib.mountAvatar(host, { definition, color: SPROUT.color, eyeColor: SPROUT.eyes, followPointer: true, label: "" });
+
+    // one place decides what she shows, from everything that is going on
+    function show() {
+      const calling = bar.classList.contains("is-calling");
+      const state = party ? "done" : thinkers.size || calling ? "thinking" : "idle";
+      const mood = party || cheer || (voiceState === "talking" && state === "idle") ? "happy" : "neutral";
+      const lookAt = glance || (voiceState === "listening" ? { x: 0, y: 0 } : caret);
+      const key = state + "|" + mood + "|" + (lookAt ? lookAt.x.toFixed(2) + "," + lookAt.y.toFixed(2) : "");
+      if (key === shown) return;
+      shown = key;
+      avatar.update({ state, mood, lookAt: lookAt || null });
+      host.dataset.state = state;               // for the tests, and for anyone styling her
+      host.dataset.mood = mood;
+      host.dataset.look = glance ? "glance" : lookAt ? "held" : "free";
+    }
+    // a direction for her eyes, from a point on the screen
+    function toward(px, py) {
+      const r = host.getBoundingClientRect();
+      const dx = px - (r.left + r.width / 2), dy = py - (r.top + r.height * 0.66);
+      const nx = dx / (Math.abs(dx) + Math.max(140, window.innerWidth * 0.22));
+      const ny = dy / (Math.abs(dy) + Math.max(110, window.innerHeight * 0.2));
+      return { x: clamp(nx * 1.25, -1, 1), y: clamp(ny * 1.25, -1, 1) };
+    }
+    function glanceAt(el, ms) {
+      if (reduceMotion.matches || !el || !el.getBoundingClientRect) return;
+      const r = el.getBoundingClientRect();
+      glance = toward(r.left + Math.min(r.width, 300) / 2, r.top + Math.min(r.height, 300) / 2);
+      clearTimeout(glanceTimer);
+      glanceTimer = setTimeout(() => { glance = null; show(); }, ms);
+      show();
+    }
+    // while the member types in the chat bar she watches the words
+    const measure = document.createElement("canvas").getContext("2d");
+    function watchCaret() {
+      if (reduceMotion.matches || document.activeElement !== input || !input.value || app.classList.contains("voice")) { if (caret) { caret = null; show(); } return; }
+      const cs = getComputedStyle(input), r = input.getBoundingClientRect();
+      let w = 0;
+      if (measure) { measure.font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily; w = measure.measureText(input.value.slice(0, input.selectionStart == null ? input.value.length : input.selectionStart)).width; }
+      caret = toward(r.left + clamp(w - input.scrollLeft, 0, r.width) + 6, r.top + r.height * 0.62);
+      show();
+    }
+    ["input", "focus", "blur", "keyup", "click", "select"].forEach((ev) => input.addEventListener(ev, watchCaret));
+    // connecting shows as thinking, and that is a class on the bar
+    if (window.MutationObserver) new MutationObserver(show).observe(bar, { attributes: true, attributeFilter: ["class"] });
+    show();
+
+    return {
+      sprout: true,
+      start() {},
+      resize() {},                               // the renderer follows her size by itself
+      center() {},                               // and rests her eyes by itself
+      blink() {},
+      heard() {},
+      lookAtEl(el) { glanceAt(el, 1500); },
+      sent(el) { glanceAt(el, 900); },
+      think(on, who = "answer") { if (on) thinkers.add(who); else thinkers.delete(who); show(); },
+      voice(state) { voiceState = state || ""; show(); },
+      hello() {
+        cheer = true; show();
+        clearTimeout(cheerTimer);
+        cheerTimer = setTimeout(() => { cheer = false; show(); }, 1300);
+      },
+      // something was booked or ordered: a short celebration, then back to calm
+      happy(el) {
+        if (reduceMotion.matches) { this.hello(); return; }
+        party = true; show();
+        clearTimeout(partyTimer);
+        partyTimer = setTimeout(() => { party = false; show(); if (el) glanceAt(el, 1200); }, 3200);
+      },
+      what: () => ({ state: host.dataset.state, mood: host.dataset.mood, look: host.dataset.look }),
+      drawn: () => !!host.firstElementChild,
+      leave() { try { avatar.destroy(); } catch (err) { /* already gone */ } },
+    };
+  }
+  // the sprout if her renderer is there, else the older face
+  let face = blobFace;
+  try {
+    const sprout = sproutFace();
+    if (sprout) { face = sprout; blobFace.retire(); }
+  } catch (err) { /* the older face stays */ }
+  if (!face.sprout) app.classList.remove("sprout-on");
+  // a moment later: if she could not be drawn on this phone after all, the older face comes back
+  else setTimeout(() => {
+    if (face.drawn()) return;
+    face.leave();
+    face = blobFace;
+    app.classList.remove("sprout-on");
+    blobFace.revive();
+    blobFace.center(app.classList.contains("voice"));
+    blobFace.resize();
+  }, 900);
 
   /* =========================================================
      6. CHAT BAR WIRING AND LAYOUT
@@ -4306,7 +4456,7 @@
   face.start();
 
   // small hook so this can be wired to a real model later
-  window.MemberAssistant = { ask, understand, MODULES, live };
+  window.MemberAssistant = { ask, understand, MODULES, live, face: () => (face.what ? face.what() : null) };
 })();
 </script>
 </body>
